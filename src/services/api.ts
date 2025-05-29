@@ -1,9 +1,9 @@
 
 import axios from 'axios';
 
-// Create axios instance
+// Create axios instance with a fallback baseURL
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'https://api.example.com',
+  baseURL: 'https://api.example.com',
   timeout: 10000,
 });
 
