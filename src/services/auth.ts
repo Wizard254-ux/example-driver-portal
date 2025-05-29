@@ -57,10 +57,11 @@ export const authService = {
 
   async login(data: LoginData): Promise<AuthResponse> {
     const response = await api.post('/auth/login/', data);
-    const { tokens } = response.data;
+    const { tokens, user } = response.data;
     
     localStorage.setItem('access_token', tokens.access);
     localStorage.setItem('refresh_token', tokens.refresh);
+    localStorage.setItem('user_data', JSON.stringify(user));
     
     return response.data;
   },
@@ -73,6 +74,7 @@ export const authService = {
   logout() {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user_data');
   },
 
   isAuthenticated(): boolean {
