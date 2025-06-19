@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // Create axios instance with a fallback baseURL
 const api = axios.create({
-  baseURL: 'https://api.example.com',
+  baseURL: 'http://localhost:8000',
   timeout: 10000,
 });
 
@@ -26,6 +26,10 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    if(error.response){
+      console.log(error.resonse, error.response.data);
+    }
+    console.log(error)
     
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
@@ -33,7 +37,7 @@ api.interceptors.response.use(
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
         try {
-          const response = await axios.post('/auth/token/refresh/', {
+          const response = await axios.post('/api/auth/token/refresh/', {
             refresh: refreshToken
           });
           

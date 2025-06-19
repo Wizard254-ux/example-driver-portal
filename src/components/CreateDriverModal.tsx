@@ -19,8 +19,6 @@ interface CreateDriverModalProps {
 const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [formData, setFormData] = useState<CreateDriverData>({
     email: '',
-    password: '',
-    password_confirm: '',
     first_name: '',
     last_name: '',
     phone_number: '',
@@ -46,14 +44,6 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (formData.password !== formData.password_confirm) {
-      toast({
-        title: "Password mismatch",
-        description: "Passwords do not match.",
-        variant: "destructive",
-      });
-      return;
-    }
 
     setIsLoading(true);
 
@@ -66,8 +56,6 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
       onSuccess();
       setFormData({
         email: '',
-        password: '',
-        password_confirm: '',
         first_name: '',
         last_name: '',
         phone_number: '',
@@ -78,11 +66,62 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
         bio: ''
       });
     } catch (error) {
+  console.error('Registration error:', error);
+  
+  // Try to extract error details from the response
+  if (error.response && error.response.data) {
+    const errorData = error.response.data;
+    
+    // Check if we have structured validation errors
+    if (errorData.errors) {
+      // Format field-specific errors
+      const errorMessages = [];
+      Object.keys(errorData.errors).forEach(field => {
+        const fieldErrors = errorData.errors[field];
+        const fieldName = field.charAt(0).toUpperCase() + field.slice(1).replace('_', ' ');
+        errorMessages.push(`${fieldName}: ${fieldErrors.join(', ')}`);
+      });
+      
       toast({
-        title: "Error",
-        description: "Failed to create driver profile.",
+        title: "Validation Error",
+        description: errorMessages.join('\n'),
         variant: "destructive",
       });
+    } 
+    // Check if we have a general error message
+    else if (errorData.error) {
+      toast({
+        title: "Error",
+        description: errorData.error,
+        variant: "destructive",
+      });
+    }
+    // Fallback to any other error format
+    else if (typeof errorData === 'string') {
+      toast({
+        title: "Error",
+        description: errorData,
+        variant: "destructive",
+      });
+    }
+    // Last resort - show generic message
+    else {
+      toast({
+        title: "Error",
+        description: "Failed to create driver profile. Please check your input.",
+        variant: "destructive",
+      });
+    }
+  } 
+  // Network or other errors
+  else {
+    toast({
+      title: "Network Error",
+      description: "Unable to connect to server. Please try again.",
+      variant: "destructive",
+    });
+  }
+
     } finally {
       setIsLoading(false);
     }
@@ -156,31 +195,6 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
                 value={formData.phone_number}
                 onChange={(e) => handleChange('phone_number', e.target.value)}
                 className="pl-10"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Strong password"
-                value={formData.password}
-                onChange={(e) => handleChange('password', e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password_confirm">Confirm Password</Label>
-              <Input
-                id="password_confirm"
-                type="password"
-                placeholder="Confirm password"
-                value={formData.password_confirm}
-                onChange={(e) => handleChange('password_confirm', e.target.value)}
                 required
               />
             </div>

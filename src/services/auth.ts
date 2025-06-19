@@ -11,6 +11,7 @@ export interface RegisterData {
   organization_name: string;
   organization_email_domain: string;
   organization_website: string;
+  user_type: string; // 'admin' | 'user'
 }
 
 export interface LoginData {
@@ -38,6 +39,7 @@ export interface User {
   created_at: string;
   updated_at: string;
   is_deleted: boolean;
+  organization:any
 }
 
 export interface AuthResponse {
@@ -51,7 +53,8 @@ export interface AuthResponse {
 
 export const authService = {
   async register(data: RegisterData): Promise<AuthResponse> {
-    const response = await api.post('/auth/register/', data);
+    console.log('registreign organization',data)
+    const response = await api.post('/api/auth/register/organization/', data);
     return response.data;
   },
 
@@ -67,9 +70,48 @@ export const authService = {
   },
 
   async changePassword(data: ChangePasswordData): Promise<{ message: string }> {
-    const response = await api.post('/auth/change-password/', data);
+    const response = await api.post('/api/auth/password/change/', data);
     return response.data;
   },
+
+  async activateAccount(uidb64:string, token:string) {
+  try {
+    const response = await api.get(`/api/auth/email/verify/${uidb64}/${token}/`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+},
+
+async resendActivation(email) {
+  try {
+    const response = await api.post('/api/auth/resend-activation/', { email });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+},
+async requestPasswordReset(email) {
+  try {
+    const response = await api.post('/api/auth/password/reset/', { email });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+},
+async confirmPasswordReset(data) {
+  try {
+    const response = await api.post('/api/auth/password/reset/confirm/',{
+        uid: data.uid,
+        token: data.token,
+        new_password: data.new_password,
+        new_password_confirm: data.new_password_confirm,
+      });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+},
 
   logout() {
     localStorage.removeItem('access_token');

@@ -3,8 +3,6 @@ import api from './api';
 
 export interface CreateDriverData {
   email: string;
-  password: string;
-  password_confirm: string;
   first_name: string;
   last_name: string;
   phone_number: string;
@@ -68,26 +66,26 @@ export interface DriversListResponse {
 
 export const driverService = {
   async createDriver(data: CreateDriverData): Promise<DriverProfile> {
-    const response = await api.post('/drivers/', data);
+    const response = await api.post('/api/auth/driver-profiles/register/', data);
     return response.data;
   },
 
   async getDrivers(): Promise<DriversListResponse> {
-    const response = await api.get('/drivers/');
+    const response = await api.get('/api/auth/driver-profiles/fetch/');
     return response.data;
   },
 
   async getDriver(id: number): Promise<DriverProfile> {
-    const response = await api.get(`/drivers/${id}/`);
+    const response = await api.get(`/api/auth/driver-profiles/${id}`);
     return response.data;
   },
 
   async updateDriver(id: number, data: UpdateDriverData): Promise<DriverProfile> {
-    const response = await api.patch(`/drivers/${id}/`, data);
+    const response = await api.patch(`/api/auth/driver-profiles/${id}/`, data);
     return response.data;
   },
 
   async deleteDriver(id: number): Promise<void> {
-    await api.delete(`/drivers/${id}/`);
+    await api.delete(`/api/auth/driver-profiles/${id}/delete/`);
   }
 };
