@@ -5,13 +5,16 @@ import { AppSidebar } from '../components/AppSidebar';
 import DashboardContent from '../components/DashboardContent';
 import Profile from '../components/Profile';
 import Settings from '../components/Settings';
+import Landing from '../components/Landing';
 
 const Dashboard = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('Landing');
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard':
+      case 'Landing':
+        return <Landing />;
+      case 'Drivers':
         return <DashboardContent />;
       case 'profile':
         return <Profile />;

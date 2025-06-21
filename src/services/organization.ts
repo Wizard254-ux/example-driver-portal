@@ -27,5 +27,15 @@ export const organizationService = {
   async updateOrganization(id: number, data: UpdateOrganizationData): Promise<Organization> {
     const response = await api.patch(`/organization/${id}/`, data);
     return response.data;
+  },
+  async getDriverSummary(): Promise<any> {
+    const response = await api.get(`/api/organization/drivers-overview`);
+    console.log('data of summary is ',response)
+    return response.data;
+  },
+  async getDriverInfo(id:string): Promise<any> {
+    const response = await api.get(`api/organization/drivers/${id}/`);
+    console.log('data of summary is ',response)
+    return response.data;
   }
 };

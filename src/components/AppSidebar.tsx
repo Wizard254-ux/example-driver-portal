@@ -11,7 +11,7 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar"
-import { Dashboard, User, Settings, LogOut, Truck } from "lucide-react"
+import { Briefcase, User, Settings, LogOut, Truck } from "lucide-react"
 import { useAuth } from "../contexts/AuthContext"
 import { authService } from "../services/auth"
 import { useNavigate } from "react-router-dom"
@@ -24,9 +24,14 @@ interface AppSidebarProps {
 
 const menuItems = [
   {
+    id: "Landing",
+    title: "Landing",
+    icon: Briefcase,
+  },
+  {
     id: "dashboard",
-    title: "Dashboard",
-    icon: Dashboard,
+    title: "Drivers",
+    icon: Briefcase,
   },
   {
     id: "profile",

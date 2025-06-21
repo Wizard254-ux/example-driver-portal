@@ -59,7 +59,7 @@ export const authService = {
   },
 
   async login(data: LoginData): Promise<AuthResponse> {
-    const response = await api.post('/auth/login/', data);
+    const response = await api.post('/api/auth/login/', data);
     const { tokens, user } = response.data;
     
     localStorage.setItem('access_token', tokens.access);

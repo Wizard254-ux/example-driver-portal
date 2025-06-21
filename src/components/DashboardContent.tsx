@@ -33,7 +33,8 @@ const DashboardContent = () => {
   const loadDrivers = async () => {
     try {
       const response = await driverService.getDrivers();
-      setDrivers(response.results);
+      console.log(response)
+      setDrivers(response);
     } catch (error) {
       toast({
         title: "Error",
@@ -95,7 +96,7 @@ const DashboardContent = () => {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{drivers.length}</div>
+            <div className="text-2xl font-bold">{drivers?.length}</div>
             <p className="text-xs text-muted-foreground">
               Active driver profiles
             </p>
@@ -109,7 +110,7 @@ const DashboardContent = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {drivers.filter(d => d.is_active).length}
+              {drivers?.filter(d => d.is_active)?.length}
             </div>
             <p className="text-xs text-muted-foreground">
               Currently active
@@ -124,7 +125,7 @@ const DashboardContent = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {drivers.length > 0 
+              {drivers?.length > 0 
                 ? Math.round(drivers.reduce((acc, d) => acc + d.years_of_experience, 0) / drivers.length)
                 : 0
               } yrs
@@ -153,7 +154,7 @@ const DashboardContent = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {drivers.length === 0 ? (
+          {drivers?.length === 0 ? (
             <div className="text-center py-12">
               <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No drivers yet</h3>
@@ -177,7 +178,7 @@ const DashboardContent = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {drivers.map((driver) => (
+                  {drivers?.map((driver) => (
                     <tr key={driver.id} className="border-b hover:bg-gray-50">
                       <td className="py-3 px-4">
                         <div>
