@@ -25,7 +25,8 @@ import {organizationService} from '../services/organization'
 interface DriverDataModalProps {
   isOpen: boolean;
   onClose: () => void;
-  driverId: number;
+  driverId?: number;
+  driver?:any
 }
 
 const ViewDriver: React.FC<DriverDataModalProps> = ({ 

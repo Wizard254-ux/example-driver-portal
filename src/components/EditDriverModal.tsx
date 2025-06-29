@@ -15,14 +15,16 @@ interface EditDriverModalProps {
   onClose: () => void;
   driver: DriverProfile;
   onSuccess: () => void;
+  orgId: number; // Ensure orgId is passed correctly
 }
 
-const EditDriverModal: React.FC<EditDriverModalProps> = ({ isOpen, onClose, driver, onSuccess }) => {
+const EditDriverModal: React.FC<EditDriverModalProps> = ({ isOpen, onClose, driver, onSuccess,orgId }) => {
   const [formData, setFormData] = useState<UpdateDriverData>({
     years_of_experience: driver.years_of_experience,
     vehicle_type: driver.vehicle_type,
     license_expiry: driver.license_expiry,
-    bio: driver.bio || ''
+    bio: driver.bio || '',
+    organization_id: orgId, // Ensure orgId is passed correctly
   });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -40,6 +42,8 @@ const EditDriverModal: React.FC<EditDriverModalProps> = ({ isOpen, onClose, driv
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    formData.organization_id = orgId; // Ensure orgId is included in the update
+    console.log(formData)
 
     try {
       await driverService.updateDriver(driver.id, formData);

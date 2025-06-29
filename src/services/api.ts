@@ -3,8 +3,8 @@ import axios from 'axios';
 
 // Create axios instance with a fallback baseURL
 const api = axios.create({
-  baseURL: 'http://localhost:8000',
-  timeout: 10000,
+  baseURL: '',
+  timeout: 10000000,
   withCredentials:true
 });
 

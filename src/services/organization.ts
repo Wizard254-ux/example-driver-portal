@@ -18,23 +18,25 @@ export interface UpdateOrganizationData {
   email_domain?: string;
 }
 
+
+
 export const organizationService = {
   async getOrganization(id: number): Promise<Organization> {
-    const response = await api.get(`/organization/${id}/`);
+    const response = await api.get(`/api/auth/organizations/${id}/`);
     return response.data;
   },
 
   async updateOrganization(id: number, data: UpdateOrganizationData): Promise<Organization> {
-    const response = await api.patch(`/organization/${id}/`, data);
+    const response = await api.patch(`/api/auth/organizations/${id}/`, data);
     return response.data;
   },
   async getDriverSummary(): Promise<any> {
-    const response = await api.get(`/api/organization/drivers-overview`);
+    const response = await api.get(`/api/dashboard/organization/drivers-overview/`);
     console.log('data of summary is ',response)
     return response.data;
   },
   async getDriverInfo(id:string): Promise<any> {
-    const response = await api.get(`api/organization/drivers/${id}/`);
+    const response = await api.get(`/api/dashboard/organization/drivers/${id}/`);
     console.log('data of summary is ',response)
     return response.data;
   }

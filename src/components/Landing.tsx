@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Truck, User, BarChart3, Calendar, Bell, Code, ShoppingCart, CreditCard, Key, Banknote, Loader2 } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { Truck, User, BarChart3, Calendar, Bell, Code, ShoppingCart, CreditCard, Key, Banknote, Loader2, RefreshCw } from 'lucide-react';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import {organizationService} from '../services/organization';
 
@@ -8,27 +8,103 @@ const Dashboard = () => {
   const [drivers, setDrivers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [reload,setreload]=useState(false);
+  const [reload, setReload] = useState(false);
+  const mountedRef = useRef(true);
+  const [lastFetched, setLastFetched] = useState<Date | null>(null);
+const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
-    const getData = async () => {
-      try {
-        setLoading(true);
-        const data = await organizationService.getDriverSummary();
-        console.log(data,'dahboard summary data')
+useEffect(() => {
+  const getData = async (forceRefresh = false) => {
+    try {
+      // Check if we have cached data and it's less than 5 minutes old
+      const cachedData = localStorage.getItem('dashboardData');
+      const cachedTimestamp = localStorage.getItem('dashboardTimestamp');
+      
+      if (!forceRefresh && cachedData && cachedTimestamp) {
+        const cacheTime = new Date(cachedTimestamp);
+        const now = new Date();
+        const timeDiff = now.getTime() - cacheTime.getTime();
+        const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+        
+        if (timeDiff < fiveMinutes) {
+          // Use cached data
+          const parsed = JSON.parse(cachedData);
+          setOrganizationData(parsed.organization_summary);
+          setDrivers(parsed.drivers);
+          setLastFetched(cacheTime);
+          setError(null);
+          setLoading(false);
+          return;
+        }
+      }
+
+      if (!mountedRef.current) return;
+      setLoading(true);
+      const data = await organizationService.getDriverSummary();
+      console.log(data,'dashboard summary data')
+      
+      if (mountedRef.current) {
         setOrganizationData(data.organization_summary);
         setDrivers(data.drivers);
         setError(null);
-      } catch (error: any) {
-        console.log('error ', error);
-        setError('Failed to fetch organization data');
-      } finally {
-        setLoading(false);
+        
+        // Cache the data
+        localStorage.setItem('dashboardData', JSON.stringify(data));
+        localStorage.setItem('dashboardTimestamp', new Date().toISOString());
+        setLastFetched(new Date());
       }
+    } catch (error: any) {
+      console.log('error ', error);
+      if (mountedRef.current) {
+        setError('Failed to fetch organization data');
+      }
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false);
+        setIsRefreshing(false);
+      }
+    }
+  };
+  
+  getData();
+
+  return () => {
+    mountedRef.current = false;
+  };
+}, [reload]);
+
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
     };
+  }, []);
+
+const handleRetry = () => {
+  setReload(prev => !prev);
+};
+
+const handleRefresh = async () => {
+  setIsRefreshing(true);
+  setError(null);
+  
+  try {
+    const data = await organizationService.getDriverSummary();
+    setOrganizationData(data.organization_summary);
+    setDrivers(data.drivers);
     
-    getData();
-  }, [reload]);
+    // Update cache
+    localStorage.setItem('dashboardData', JSON.stringify(data));
+    localStorage.setItem('dashboardTimestamp', new Date().toISOString());
+    setLastFetched(new Date());
+  } catch (error: any) {
+    console.log('refresh error ', error);
+    setError('Failed to refresh data');
+  } finally {
+    setIsRefreshing(false);
+  }
+};
 
   // Show loading state
   if (loading) {
@@ -56,7 +132,7 @@ const Dashboard = () => {
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Data</h2>
           <p className="text-gray-600 mb-4">{error}</p>
           <button 
-            // onClick={setreload(prev=>!prev)} 
+            onClick={handleRetry}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             Retry
@@ -64,6 +140,49 @@ const Dashboard = () => {
         </div>
       </div>
     );
+  }
+
+  const distanceByDriverData = drivers.map(driver => ({
+    driver_name: `${driver.driver_info?.first_name || 'Unknown'} ${driver.driver_info?.last_name || ''}`,
+    total_distance: driver.statistics?.total_distance || 0,
+    color: getColorForDriver(driver.driver_info?.first_name || 'Unknown')
+  })).filter(item => item.total_distance > 0);
+
+  const truckModelData = drivers.reduce((acc: any[], driver) => {
+    const truckModel = driver.assigned_trucks?.[0]?.truck_model || 'Unknown';
+    const existingModel = acc.find(item => item.model === truckModel);
+    if (existingModel) {
+      existingModel.count += 1;
+      existingModel.total_distance += driver.statistics?.total_distance || 0;
+    } else {
+      acc.push({
+        model: truckModel,
+        count: 1,
+        total_distance: driver.statistics?.total_distance || 0,
+        color: getColorForTruckModel(truckModel)
+      });
+    }
+    return acc;
+  }, []);
+
+  function getColorForDriver(driverName: string) {
+    const colors = ['#4F46E5', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+    const hash = driverName.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    return colors[Math.abs(hash) % colors.length];
+  }
+
+  function getColorForTruckModel(model: string) {
+    const colors: { [key: string]: string } = {
+      'BMW': '#4F46E5',
+      'Ferrari': '#06B6D4', 
+      'Pajero': '#10B981',
+      'Rover': '#F59E0B',
+      'Hammer': '#EF4444'
+    };
+    return colors[model] || '#6B7280';
   }
 
   // Calculate expense categories from real data
@@ -85,15 +204,15 @@ const Dashboard = () => {
 
   function getColorForCategory(category: string) {
     const colors: { [key: string]: string } = {
-      'Fuel': '#FF6384',
-      'Food': '#36A2EB',
-      'Maintenance': '#FFCE56',
-      'Insurance': '#4BC0C0',
-      'Repairs': '#9966FF',
-      'Toll': '#FF9F40',
-      'Parking': '#FF6384'
+      'Fuel': '#4F46E5',
+      'Food': '#06B6D4',
+      'Maintenance': '#10B981',
+      'Insurance': '#F59E0B',
+      'Repairs': '#EF4444',
+      'Toll': '#8B5CF6',
+      'Parking': '#EC4899'
     };
-    return colors[category] || '#999999';
+    return colors[category] || '#6B7280';
   }
 
   // Budget vs actual expenses for active trips
@@ -120,33 +239,18 @@ const Dashboard = () => {
 
   // Timeline events from real data
   const timelineEvents = drivers.flatMap(driver => 
-    (driver.recent_expenses || []).map((expense: any) => ({
-      type: 'expense',
-      icon: Bell,
-      text: `$${expense.amount} - ${expense.description}`,
-      date: new Date(expense.created_at).toLocaleDateString('en-US', { 
+    (driver.recent_trips || []).map((trip: any) => ({
+      type: 'trip',
+      icon: Code,
+      text: `Trip #${trip.trip_id} started - ${trip.source} to ${trip.destination} (${trip.total_distance.toLocaleString()} km)`,
+      date: new Date(trip.trip_start).toLocaleDateString('en-US', { 
         month: 'short', 
         day: 'numeric', 
         hour: '2-digit', 
         minute: '2-digit' 
       }),
-      color: 'text-green-500'
+      color: 'text-blue-500'
     }))
-  ).concat(
-    drivers.flatMap(driver => 
-      (driver.recent_trips || []).map((trip: any) => ({
-        type: 'trip',
-        icon: Code,
-        text: `New trip #${trip.trip_id} - ${trip.source} to ${trip.destination}`,
-        date: new Date(trip.trip_start).toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric', 
-          hour: '2-digit', 
-          minute: '2-digit' 
-        }),
-        color: 'text-blue-500'
-      }))
-    )
   ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const getProgressBarColor = (percentage: number) => {
@@ -160,31 +264,55 @@ const Dashboard = () => {
     ? ((organizationData.total_distance_all_drivers / 1000) * 8 / organizationData.total_trips_all_drivers).toFixed(1)
     : '0';
 
-  // Calculate average fuel consumption (assuming 12L per 100km)
-  const avgFuelConsumption = organizationData.total_distance_all_drivers > 0 
-    ? ((organizationData.total_distance_all_drivers / 100) * 12 / organizationData.total_trips_all_drivers).toFixed(1)
-    : '0';
+  const fuelConsumptionData = drivers.reduce((acc: any[], driver) => {
+    const fuelExpenses = driver.recent_expenses?.filter((expense: any) => 
+      expense.category === 'Fuel'
+    ) || [];
+    
+    if (fuelExpenses.length > 0) {
+      const totalFuelCost = fuelExpenses.reduce((sum: number, expense: any) => sum + expense.amount, 0);
+      acc.push({
+        driver_name: `${driver.driver_info?.first_name || 'Unknown'} ${driver.driver_info?.last_name || ''}`,
+        fuel_cost: totalFuelCost,
+        color: getColorForDriver(driver.driver_info?.first_name || 'Unknown')
+      });
+    }
+    return acc;
+  }, []);
+
+  // Custom label component for pie charts
+  const renderCustomLabel = (entry: any, total: number) => {
+    const percent = ((entry.value / total) * 100).toFixed(1);
+    return `${entry.value}\n${percent}%`;
+  };
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0];
+      return (
+        <div className="bg-white p-3 rounded-lg shadow-lg border">
+          <p className="font-medium text-gray-900">{data.name}</p>
+          <p className="text-sm text-gray-600">
+            Value: {typeof data.value === 'number' ? data.value.toLocaleString() : data.value}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen relative bg-gray-50 p-6">
+      <button
+      onClick={handleRefresh}
+      disabled={isRefreshing}
+      className="flex items-center space-x-2 px-2 absolute -top-2 right-6 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+    >
+      <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+      <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+    </button>
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {organizationData.organization_name || 'Fleet'} Dashboard
-          </h1>
-          <p className="text-gray-600">Monitor fleet performance, driver activities, and operational metrics.</p>
-          {organizationData.organization_website && (
-            <a 
-              href={organizationData.organization_website} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:text-blue-800 text-sm"
-            >
-              Visit Website →
-            </a>
-          )}
-        </div>
+        
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -211,7 +339,7 @@ const Dashboard = () => {
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Trips</p>
+                <p className="text-sm text-gray-600">Total drivers <br/>trips</p>
                 <h3 className="text-2xl font-bold text-gray-900">
                   {organizationData.total_trips_all_drivers || 0}
                 </h3>
@@ -265,108 +393,206 @@ const Dashboard = () => {
 
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Expenses by Category */}
+          {/* Distance Distribution */}
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h6 className="text-lg font-semibold mb-2">Total Expenses by Category</h6>
-            <p className="text-sm text-gray-600 mb-4">Breakdown of current expenses</p>
-            {expenseCategoryData.length > 0 ? (
+            <h6 className="text-lg font-semibold mb-2">Distance Distribution</h6>
+            <p className="text-sm text-gray-600 mb-4">Total distance covered by each driver</p>
+            {distanceByDriverData.length > 0 ? (
               <>
-                <div className="h-48">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={expenseCategoryData}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={60}
-                        dataKey="total_expense"
-                      >
-                        {expenseCategoryData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => `$${Number(value).toLocaleString()}`} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-4 pt-4 border-t">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    <div>
-                      {expenseCategoryData.map((data, index) => (
-                        <div key={index} className="mb-1 flex items-center">
-                          <div 
-                            className="w-3 h-3 rounded-full mr-2" 
-                            style={{ backgroundColor: data.color }}
-                          ></div>
-                          {data.category}: ${data.total_expense.toLocaleString()}
+                <div className="h-64 flex items-center justify-center">
+                  <div className="relative">
+                    <ResponsiveContainer width={280} height={280}>
+                      <PieChart>
+                        <defs>
+                          {distanceByDriverData.map((entry, index) => (
+                            <linearGradient key={`gradient-${index}`} id={`gradient-${index}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor={entry.color} stopOpacity={0.8} />
+                              <stop offset="100%" stopColor={entry.color} stopOpacity={1} />
+                            </linearGradient>
+                          ))}
+                        </defs>
+                        <Pie
+                          data={distanceByDriverData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={(entry) => renderCustomLabel(entry, distanceByDriverData.reduce((sum, item) => sum + item.total_distance, 0))}
+                          outerRadius={100}
+                          innerRadius={40}
+                          fill="#8884d8"
+                          dataKey="total_distance"
+                          stroke="none"
+                        >
+                          {distanceByDriverData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={`url(#gradient-${index})`} />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<CustomTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="text-center">
+                        <div className="text-xs text-gray-500 font-medium">Total</div>
+                        <div className="text-sm font-bold text-gray-900">
+                          {distanceByDriverData.reduce((sum, item) => sum + item.total_distance, 0).toLocaleString()}
                         </div>
-                      ))}
+                        <div className="text-xs text-gray-500">km</div>
+                      </div>
                     </div>
                   </div>
                 </div>
+                
+                {/* Legend */}
+                <div className="mt-4 space-y-2">
+                  {distanceByDriverData.map((data, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div 
+                          className="w-3 h-3 rounded-full mr-3" 
+                          style={{ backgroundColor: data.color }}
+                        ></div>
+                        <span className="text-sm text-gray-700">{data.driver_name}</span>
+                      </div>
+                      <span className="text-sm font-medium text-gray-900">
+                        {data.total_distance.toLocaleString()} km
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </>
             ) : (
-              <div className="h-48 flex items-center justify-center text-gray-500">
-                No expense data available
+              <div className="h-64 flex items-center justify-center text-gray-500">
+                No distance data available
               </div>
             )}
           </div>
 
-          {/* Fuel Consumption */}
+          {/* Fleet Composition */}
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h6 className="text-lg font-semibold mb-2">Average Fuel Consumption</h6>
-            <p className="text-sm text-gray-600 mb-4">Estimated fuel usage per trip</p>
-            <div className="h-48 flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-4xl font-bold text-blue-600 mb-2">
-                  {avgFuelConsumption}L
+            <h6 className="text-lg font-semibold mb-2">Fleet Composition</h6>
+            <p className="text-sm text-gray-600 mb-4">Distribution of truck models in fleet</p>
+            {truckModelData.length > 0 ? (
+              <>
+                <div className="h-64 flex items-center justify-center">
+                  <div className="relative">
+                    <ResponsiveContainer width={280} height={280}>
+                      <PieChart>
+                        <defs>
+                          {truckModelData.map((entry, index) => (
+                            <linearGradient key={`fleet-gradient-${index}`} id={`fleet-gradient-${index}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor={entry.color} stopOpacity={0.8} />
+                              <stop offset="100%" stopColor={entry.color} stopOpacity={1} />
+                            </linearGradient>
+                          ))}
+                        </defs>
+                        <Pie
+                          data={truckModelData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={(entry) => renderCustomLabel(entry, truckModelData.reduce((sum, item) => sum + item.count, 0))}
+                          outerRadius={100}
+                          innerRadius={40}
+                          fill="#8884d8"
+                          dataKey="count"
+                          stroke="none"
+                        >
+                          {truckModelData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={`url(#fleet-gradient-${index})`} />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<CustomTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="text-center">
+                        <div className="text-xs text-gray-500 font-medium">Total</div>
+                        <div className="text-sm font-bold text-gray-900">
+                          {truckModelData.reduce((sum, item) => sum + item.count, 0)}
+                        </div>
+                        <div className="text-xs text-gray-500">trucks</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-sm text-gray-600">Average per trip</div>
+
+                {/* Legend */}
+                <div className="mt-4 space-y-2">
+                  {truckModelData.map((data, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div 
+                          className="w-3 h-3 rounded-full mr-3" 
+                          style={{ backgroundColor: data.color }}
+                        ></div>
+                        <span className="text-sm text-gray-700">{data.model}</span>
+                      </div>
+                      <span className="text-sm font-medium text-gray-900">
+                        {data.count} truck{data.count > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="h-64 flex items-center justify-center text-gray-500">
+                No fleet data available
               </div>
-            </div>
-            <div className="mt-4 pt-4 border-t">
-              <div className="flex items-center text-sm text-gray-600">
-                <Calendar className="w-4 h-4 mr-2" />
-                <span>Estimated consumption rate</span>
-              </div>
-            </div>
+            )}
           </div>
 
-          {/* Budget vs Actual */}
+          {/* Driver Performance */}
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h6 className="text-lg font-semibold mb-2">Budget vs Actual Expenses</h6>
-            <p className="text-sm text-gray-600 mb-4">Driver expense comparison</p>
-            {budgetVsActual.length > 0 ? (
+            <h6 className="text-lg font-semibold mb-2">Driver Performance</h6>
+            <p className="text-sm text-gray-600 mb-4">Distance covered by each driver</p>
+            {distanceByDriverData.length > 0 ? (
               <>
-                <div className="h-48">
+                <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={budgetVsActual}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="driver_name" />
-                      <YAxis />
-                      <Tooltip formatter={(value) => `$${Number(value).toLocaleString()}`} />
-                      <Bar dataKey="budget" fill="#FF6384" name="Budget" />
-                      <Bar dataKey="actual_expenses" fill="#36A2EB" name="Actual" />
+                    <BarChart data={distanceByDriverData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis 
+                        dataKey="driver_name" 
+                        tick={{ fontSize: 10, fill: '#6B7280' }}
+                        angle={-45}
+                        textAnchor="end"
+                        height={60}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis 
+                        tick={{ fontSize: 12, fill: '#6B7280' }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip 
+                        formatter={(value) => [`${Number(value).toLocaleString()} km`, 'Distance']}
+                        contentStyle={{
+                          backgroundColor: 'white',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                        }}
+                      />
+                      <Bar 
+                        dataKey="total_distance" 
+                        fill="#4F46E5" 
+                        name="Distance (km)"
+                        radius={[4, 4, 0, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
                 <div className="mt-4 pt-4 border-t">
                   <div className="flex items-center text-sm text-gray-600">
                     <Calendar className="w-4 h-4 mr-2" />
-                    <div>
-                      {budgetVsActual.map((data, index) => (
-                        <div key={index} className="mb-1 text-xs">
-                          {data.driver_name}: Budget = ${data.budget}, Actual = ${data.actual_expenses}
-                        </div>
-                      ))}
-                    </div>
+                    <span>Total distance covered per driver</span>
                   </div>
                 </div>
               </>
             ) : (
-              <div className="h-48 flex items-center justify-center text-gray-500">
-                No driver data available
+              <div className="h-64 flex items-center justify-center text-gray-500">
+                No driver performance data available
               </div>
             )}
           </div>

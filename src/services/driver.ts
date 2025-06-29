@@ -11,6 +11,9 @@ export interface CreateDriverData {
   years_of_experience: number;
   vehicle_type: string;
   bio?: string;
+  organization_id?:number;
+    password: string;
+  password_confirm: string;
 }
 
 export interface UpdateDriverData {
@@ -18,6 +21,7 @@ export interface UpdateDriverData {
   vehicle_type?: string;
   license_expiry?: string;
   bio?: string;
+  organization_id?: number; // Optional for updating organization
 }
 
 export interface Organization {
@@ -66,26 +70,28 @@ export interface DriversListResponse {
 
 export const driverService = {
   async createDriver(data: CreateDriverData): Promise<DriverProfile> {
-    const response = await api.post('/api/auth/driver-profiles/register/', data);
+    const response = await api.post('/api/auth/register/driver/', data);
     return response.data;
   },
 
   async getDrivers(): Promise<DriversListResponse> {
-    const response = await api.get('/api/auth/driver-profiles/fetch/');
+    const response = await api.get('/api/auth/driver-profiles/');
     return response.data;
   },
 
   async getDriver(id: number): Promise<DriverProfile> {
+
     const response = await api.get(`/api/auth/driver-profiles/${id}`);
     return response.data;
   },
 
   async updateDriver(id: number, data: UpdateDriverData): Promise<DriverProfile> {
+    console.log('data to update ',data)
     const response = await api.patch(`/api/auth/driver-profiles/${id}/`, data);
     return response.data;
   },
 
   async deleteDriver(id: number): Promise<void> {
-    await api.delete(`/api/auth/driver-profiles/${id}/delete/`);
+    await api.delete(`/api/auth/driver-profiles/${id}/`);
   }
 };

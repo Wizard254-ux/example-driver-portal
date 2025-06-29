@@ -23,7 +23,7 @@ const Profile = () => {
   const loadOrganization = async () => {
     try {
       // Using a dummy ID for now - you can replace this with the actual organization ID from user context
-      const orgData = await organizationService.getOrganization(8);
+      const orgData = await organizationService.getOrganization(1);
       setOrganization(orgData);
       setEditData({
         name: orgData.name,
@@ -109,12 +109,7 @@ const Profile = () => {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Organization Details</CardTitle>
-          <CardDescription>
-            View and update your organization information
-          </CardDescription>
-        </CardHeader>
+         
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -136,7 +131,8 @@ const Profile = () => {
               />
             </div>
           </div>
-
+          
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
           <div>
             <Label htmlFor="name">Organization Name</Label>
             <Input
@@ -189,6 +185,7 @@ const Profile = () => {
               disabled
               className="bg-gray-100"
             />
+          </div>
           </div>
 
           {isEditing && (

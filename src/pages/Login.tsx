@@ -120,7 +120,7 @@ const Login = () => {
       <div className="flex-1 flex items-center justify-center bg-gray-50 min-h-[40vh] lg:min-h-screen">
         <Card className="w-full max-w-md shadow-xl border-0">
           <CardHeader className="text-center pb-6">
-            <CardTitle className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Welcome Back</CardTitle>
+            <CardTitle className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Welcome </CardTitle>
             <CardDescription className="text-sm sm:text-base text-gray-600">
               Sign in to your logistics dashboard
             </CardDescription>

@@ -19,7 +19,8 @@ const Register = () => {
     phone_number: '',
     organization_name: '',
     organization_email_domain: '',
-    organization_website: ''
+    organization_website: '',
+    user_type: 'admin'
   });
   const [activationData, setActivationData] = useState({
     uidb64: '',
@@ -71,11 +72,12 @@ const Register = () => {
       const res=await authService.register(formData);
       localStorage.setItem('access_token',res.tokens.access)
       setUserEmail(formData.email);
-      setStep(2); // Move to activation step
+      // setStep(2); // Move to activation step
       toast({
         title: "Registration successful",
-        description: "Please check your email for activation instructions.",
+        description: "You can now login.",
       });
+      navigate('/login')
     } catch (error) {
       console.log(error);
       
