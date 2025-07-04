@@ -416,7 +416,6 @@ const DashboardContent = () => {
                     <tr className="border-b">
                       <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm">Driver</th>
                       <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm hidden sm:table-cell">License</th>
-                      <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm hidden md:table-cell">Vehicle</th>
                       <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm hidden lg:table-cell">Experience</th>
                       <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm">Status</th>
                       <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm">Actions</th>
@@ -451,11 +450,7 @@ const DashboardContent = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="py-3 px-2 sm:px-4 hidden md:table-cell">
-                          <Badge variant="secondary" className="text-xs">
-                            {driver.vehicle_type}
-                          </Badge>
-                        </td>
+                     
                         <td className="py-3 px-2 sm:px-4 whitespace-nowrap text-sm hidden lg:table-cell">
                           {driver.years_of_experience} years
                         </td>
