@@ -9,6 +9,7 @@ export interface Organization {
   website: string;
   email_domain: string;
   is_active: boolean;
+  organization:any;
 }
 
 export interface UpdateOrganizationData {
@@ -22,12 +23,12 @@ export interface UpdateOrganizationData {
 
 export const organizationService = {
   async getOrganization(id: number): Promise<Organization> {
-    const response = await api.get(`/api/auth/organizations/${id}/`);
+    const response = await api.get(`/api/auth/organization-admin-profiles/${id}/`);
     return response.data;
   },
 
   async updateOrganization(id: number, data: UpdateOrganizationData): Promise<Organization> {
-    const response = await api.patch(`/api/auth/organizations/${id}/`, data);
+    const response = await api.patch(`/api/auth/organization-admin-profiles/${id}/`, data);
     return response.data;
   },
   async getDriverSummary(): Promise<any> {
@@ -37,7 +38,7 @@ export const organizationService = {
   },
   async getDriverInfo(id:string): Promise<any> {
     const response = await api.get(`/api/dashboard/organization/drivers/${id}/`);
-    console.log('data of summary is ',response)
+    console.log('data driver of summary is ',response)
     return response.data;
   }
 };

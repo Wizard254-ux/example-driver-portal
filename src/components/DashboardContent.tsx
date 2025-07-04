@@ -13,7 +13,9 @@ import {
   Trash2,
   RefreshCw,
   Search,
-  X
+  X,
+  MoreVertical,
+  ChevronDown
 } from 'lucide-react';
 import { driverService, DriverProfile } from '../services/driver';
 import { toast } from '@/hooks/use-toast';
@@ -29,6 +31,67 @@ interface CachedData {
   data: any[];
   timestamp: number;
 }
+
+// Dropdown Menu Component
+const ActionDropdown = ({ driver, onView, onEdit, onDelete }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const handleAction = (action) => {
+    setIsOpen(false);
+    action();
+  };
+
+  return (
+    <div className="relative">
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-1"
+      >
+        Actions
+        <ChevronDown className="h-3 w-3" />
+      </Button>
+      
+      {isOpen && (
+        <>
+          {/* Overlay to close dropdown */}
+          <div 
+            className="fixed inset-0 z-10" 
+            onClick={() => setIsOpen(false)}
+          />
+          
+          {/* Dropdown Menu */}
+          <div className="absolute right-0 mt-1 w-32 bg-white border border-gray-200 rounded-md shadow-lg z-20">
+            <div className="py-1">
+              <button
+                onClick={() => handleAction(() => onView(driver))}
+                className="w-full px-3 py-2 text-sm text-left hover:bg-gray-50 flex items-center gap-2"
+              >
+                <Eye className="h-4 w-4" />
+                View
+              </button>
+              <button
+                onClick={() => handleAction(() => onEdit(driver))}
+                className="w-full px-3 py-2 text-sm text-left hover:bg-gray-50 flex items-center gap-2"
+              >
+                <Edit className="h-4 w-4" />
+                Edit
+              </button>
+              <button
+                onClick={() => handleAction(() => onDelete(driver.id))}
+                className="w-full px-3 py-2 text-sm text-left hover:bg-gray-50 text-red-600 flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 const DashboardContent = () => {
   const [drivers, setDrivers] = useState<any>([]);
@@ -117,11 +180,11 @@ const DashboardContent = () => {
       }
 
       const response = await driverService.getDrivers();
-      console.log(response);
-      setDrivers(response);
+      console.log('fetched drivers ',response);
+      setDrivers(response.results);
       
       // Cache the fresh data
-      setCachedData(response);
+      setCachedData(response.results);
       
     } catch (error) {
       toast({
@@ -217,8 +280,6 @@ const DashboardContent = () => {
         </Button>
       </div>
 
-
-
       {/* Stats Cards - Show filtered stats when searching */}
       <div className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <Card className="min-w-0">
@@ -243,7 +304,7 @@ const DashboardContent = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {filteredDrivers?.filter(d => d.is_active)?.length || 0}
+              {filteredDrivers?.length>0&&filteredDrivers.filter(d => d.is_active)?.length || 0}
             </div>
             <p className="text-xs text-muted-foreground">
               Currently active
@@ -348,42 +409,67 @@ const DashboardContent = () => {
             </div>
           ) : (
             <div className="w-full">
-              {/* Mobile Cards View */}
-              <div className="block lg:hidden">
-                <div className="space-y-4 p-4">
-                  {filteredDrivers?.map((driver) => (
-                    <Card key={driver.id} className="p-4">
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-start">
-                          <div className="min-w-0 flex-1">
-                            <div className="font-medium truncate">
+              {/* Unified Table View for all screen sizes */}
+              <div className="overflow-x-auto ">
+                <table className="w-full min-w-full overflow-auto">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm">Driver</th>
+                      <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm hidden sm:table-cell">License</th>
+                      <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm hidden md:table-cell">Vehicle</th>
+                      <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm hidden lg:table-cell">Experience</th>
+                      <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm">Status</th>
+                      <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className='ozverflow-y-auto'>
+                    {filteredDrivers?.length>0&&filteredDrivers.map((driver) => (
+                      <tr key={driver.id} className="border-b hover:bg-gray-50">
+                        <td className="py-3 px-2 sm:px-4 min-w-0">
+                          <div className="min-w-0">
+                            <div className="font-medium text-sm truncate">
                               {driver.user.first_name} {driver.user.last_name}
                             </div>
-                            <div className="text-sm text-gray-500 truncate">
+                            <div className="text-xs text-gray-500 truncate">
                               {driver.user.masked_email}
                             </div>
+                            {/* Show license info on mobile */}
+                            <div className="text-xs text-gray-500 truncate sm:hidden">
+                              {driver.license_number}
+                            </div>
+                            {/* Show vehicle type on mobile and small tablets */}
+                            <div className="text-xs text-gray-500 truncate md:hidden">
+                              {driver.vehicle_type} • {driver.years_of_experience}yr
+                            </div>
                           </div>
-                          <Badge variant={driver.is_active ? "default" : "secondary"} className="ml-2 flex-shrink-0">
-                            {driver.is_active ? "Active" : "Inactive"}
-                          </Badge>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <span className="text-gray-500">License:</span>
-                            <div className="truncate">{driver.license_number}</div>
+                        </td>
+                        <td className="py-3 px-2 sm:px-4 min-w-0 hidden sm:table-cell">
+                          <div className="min-w-0">
+                            <div className="text-sm truncate">{driver.license_number}</div>
+                            <div className="text-xs text-gray-500">
+                              Exp: {new Date(driver.license_expiry).toLocaleDateString()}
+                            </div>
                           </div>
-                          <div>
-                            <span className="text-gray-500">Experience:</span>
-                            <div>{driver.years_of_experience} years</div>
-                          </div>
-                        </div>
-                        
-                        <div className="flex justify-between items-center">
+                        </td>
+                        <td className="py-3 px-2 sm:px-4 hidden md:table-cell">
                           <Badge variant="secondary" className="text-xs">
                             {driver.vehicle_type}
                           </Badge>
-                          <div className="flex space-x-1">
+                        </td>
+                        <td className="py-3 px-2 sm:px-4 whitespace-nowrap text-sm hidden lg:table-cell">
+                          {driver.years_of_experience} years
+                        </td>
+                        <td className="py-3 px-2 sm:px-4">
+                          <Badge 
+                            variant={driver.is_active ? "default" : "secondary"}
+                            className="text-xs"
+                          >
+                            {driver.is_active ? "Active" : "Inactive"}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-2 sm:px-4">
+                          {/* Desktop view - show all buttons */}
+                          <div className="hidden lg:flex space-x-2">
                             <Button
                               size="sm"
                               variant="outline"
@@ -406,91 +492,21 @@ const DashboardContent = () => {
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-
-              {/* Desktop Table View */}
-              <div className="hidden lg:block">
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-full">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4 font-medium">Driver</th>
-                        <th className="text-left py-3 px-4 font-medium">License</th>
-                        <th className="text-left py-3 px-4 font-medium">Vehicle Type</th>
-                        <th className="text-left py-3 px-4 font-medium">Experience</th>
-                        <th className="text-left py-3 px-4 font-medium">Status</th>
-                        <th className="text-left py-3 px-4 font-medium">Actions</th>
+                          
+                          {/* Mobile/Tablet view - show dropdown */}
+                          <div className="lg:hidden">
+                            <ActionDropdown
+                              driver={driver}
+                              onView={handleViewDriver}
+                              onEdit={handleEditDriver}
+                              onDelete={handleDeleteDriver}
+                            />
+                          </div>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {filteredDrivers?.map((driver) => (
-                        <tr key={driver.id} className="border-b hover:bg-gray-50">
-                          <td className="py-3 px-4 min-w-0">
-                            <div className="min-w-0">
-                              <div className="font-medium truncate">
-                                {driver.user.first_name} {driver.user.last_name}
-                              </div>
-                              <div className="text-sm text-gray-500 truncate">
-                                {driver.user.masked_email}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 min-w-0">
-                            <div className="min-w-0">
-                              <div className="text-sm truncate">{driver.license_number}</div>
-                              <div className="text-xs text-gray-500">
-                                Expires: {new Date(driver.license_expiry).toLocaleDateString()}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <Badge variant="secondary" className="text-xs">
-                              {driver.vehicle_type}
-                            </Badge>
-                          </td>
-                          <td className="py-3 px-4 whitespace-nowrap">
-                            {driver.years_of_experience} years
-                          </td>
-                          <td className="py-3 px-4">
-                            <Badge variant={driver.is_active ? "default" : "secondary"}>
-                              {driver.is_active ? "Active" : "Inactive"}
-                            </Badge>
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex space-x-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleViewDriver(driver)}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleEditDriver(driver)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleDeleteDriver(driver.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}

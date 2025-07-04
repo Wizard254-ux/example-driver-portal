@@ -73,6 +73,57 @@ useEffect(() => {
   };
 }, [reload]);
 
+const expenseFlowData = drivers.reduce((acc: any[], driver) => {
+  driver.recent_expenses?.forEach((expense: any) => {
+    const expenseDate = new Date(expense.created_at).toISOString().split('T')[0]; // Get date only
+    const existingDate = acc.find(item => item.date === expenseDate);
+    
+    if (existingDate) {
+      existingDate.total_amount += expense.amount;
+      existingDate.expense_count += 1;
+    } else {
+      acc.push({
+        date: expenseDate,
+        total_amount: expense.amount,
+        expense_count: 1,
+        formatted_date: new Date(expense.created_at).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        })
+      });
+    }
+  });
+  return acc;
+}, [])
+.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+.slice(-7); // Get last 7 days
+
+
+
+
+const expenseCategoryData = drivers.reduce((acc: any[], driver) => {
+  driver.recent_expenses?.forEach((expense: any) => {
+    const existingCategory = acc.find(item => item.category === expense.category);
+    if (existingCategory) {
+      existingCategory.total_expense += expense.amount;
+      existingCategory.count += 1;
+    } else {
+      acc.push({
+        category: expense.category,
+        total_expense: expense.amount,
+        count: 1,
+        color: getColorForCategory(expense.category)
+      });
+    }
+  });
+  return acc;
+}, [])
+.filter(item => item.total_expense > 0)
+.sort((a, b) => b.total_expense - a.total_expense);
+
+
+
+
 
   useEffect(() => {
     mountedRef.current = true;
@@ -148,8 +199,9 @@ const handleRefresh = async () => {
     color: getColorForDriver(driver.driver_info?.first_name || 'Unknown')
   })).filter(item => item.total_distance > 0);
 
-  const truckModelData = drivers.reduce((acc: any[], driver) => {
-    const truckModel = driver.assigned_trucks?.[0]?.truck_model || 'Unknown';
+const truckModelData = drivers.reduce((acc: any[], driver) => {
+  driver.assigned_trucks?.forEach((truck: any) => {
+    const truckModel = truck.truck_model || 'Unknown';
     const existingModel = acc.find(item => item.model === truckModel);
     if (existingModel) {
       existingModel.count += 1;
@@ -162,8 +214,10 @@ const handleRefresh = async () => {
         color: getColorForTruckModel(truckModel)
       });
     }
-    return acc;
-  }, []);
+  });
+  return acc;
+}, []);
+
 
   function getColorForDriver(driverName: string) {
     const colors = ['#4F46E5', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
@@ -174,46 +228,27 @@ const handleRefresh = async () => {
     return colors[Math.abs(hash) % colors.length];
   }
 
-  function getColorForTruckModel(model: string) {
-    const colors: { [key: string]: string } = {
-      'BMW': '#4F46E5',
-      'Ferrari': '#06B6D4', 
-      'Pajero': '#10B981',
-      'Rover': '#F59E0B',
-      'Hammer': '#EF4444'
-    };
-    return colors[model] || '#6B7280';
-  }
+function getColorForTruckModel(model: string) {
+  const colors = ['#4F46E5', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#F97316', '#84CC16', '#6366F1'];
+  const hash = model.split('').reduce((a, b) => {
+    a = ((a << 5) - a) + b.charCodeAt(0);
+    return a & a;
+  }, 0);
+  return colors[Math.abs(hash) % colors.length];
+}
 
-  // Calculate expense categories from real data
-  const expenseCategoryData = drivers.reduce((acc: any[], driver) => {
-    driver.recent_expenses?.forEach((expense: any) => {
-      const existingCategory = acc.find(item => item.category === expense.category);
-      if (existingCategory) {
-        existingCategory.total_expense += expense.amount;
-      } else {
-        acc.push({
-          category: expense.category,
-          total_expense: expense.amount,
-          color: getColorForCategory(expense.category)
-        });
-      }
-    });
-    return acc;
-  }, []).filter(item => item.total_expense > 0);
+  // Calculate expense categories from real dat
 
-  function getColorForCategory(category: string) {
-    const colors: { [key: string]: string } = {
-      'Fuel': '#4F46E5',
-      'Food': '#06B6D4',
-      'Maintenance': '#10B981',
-      'Insurance': '#F59E0B',
-      'Repairs': '#EF4444',
-      'Toll': '#8B5CF6',
-      'Parking': '#EC4899'
-    };
-    return colors[category] || '#6B7280';
-  }
+
+function getColorForCategory(category: string) {
+  const colors = ['#4F46E5', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#F97316', '#84CC16', '#6366F1'];
+  const hash = category.split('').reduce((a, b) => {
+    a = ((a << 5) - a) + b.charCodeAt(0);
+    return a & a;
+  }, 0);
+  return colors[Math.abs(hash) % colors.length];
+}
+
 
   // Budget vs actual expenses for active trips
   const budgetVsActual = drivers.map((driver, index) => ({
@@ -316,6 +351,7 @@ const handleRefresh = async () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -390,6 +426,7 @@ const handleRefresh = async () => {
             </div>
           </div>
         </div>
+ 
 
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -597,6 +634,255 @@ const handleRefresh = async () => {
             )}
           </div>
         </div>
+
+        {/* Add this section after the existing charts row and before the bottom section */}
+{/* Expense Analytics Row */}
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+  {/* Expense Flow Chart */}
+  <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg border border-gray-100 p-2 backdrop-blur-sm">
+    <div className="flex items-center justify-between mb-6">
+      <div>
+        <h6 className="text-xl font-bold text-gray-900 mb-1">Expense Flow</h6>
+        <p className="text-sm text-gray-600">Daily expense trends over the last 7 days</p>
+      </div>
+      <div className="px-3 py-1 bg-blue-100 rounded-full">
+        <span className="text-xs font-medium text-blue-700">7 Days</span>
+      </div>
+    </div>
+    
+    {expenseFlowData.length > 0 ? (
+      <>
+        <div className="h-64 relative">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart 
+              data={expenseFlowData} 
+              margin={{ top: 20, right: 0, left: 0, bottom: 0 }}
+            >
+              <defs>
+                <linearGradient id="expenseGradient" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#6366f1" stopOpacity={0.8} />
+                  <stop offset="100%" stopColor="#6366f1" stopOpacity={0.1} />
+                </linearGradient>
+                <linearGradient id="lineGradient" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#8b5cf6" />
+                  <stop offset="50%" stopColor="#6366f1" />
+                  <stop offset="100%" stopColor="#3b82f6" />
+                </linearGradient>
+              </defs>
+              
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.6} />
+              <XAxis 
+                dataKey="formatted_date" 
+                tick={{ fontSize: 12, fill: '#6b7280', fontWeight: '500' }}
+                axisLine={false}
+                tickLine={false}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
+              <YAxis 
+                tick={{ fontSize: 12, fill: '#6b7280', fontWeight: '500' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(value) => `$${value.toLocaleString()}`}
+              />
+              <Tooltip 
+                formatter={(value) => [`$${Number(value).toLocaleString()}`, 'Total Expenses']}
+                labelFormatter={(label) => `Date: ${label}`}
+                contentStyle={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  border: 'none',
+                  borderRadius: '12px',
+                  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                  backdropFilter: 'blur(8px)',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+              />
+              
+              <Line 
+                type="monotone" 
+                dataKey="total_amount" 
+                stroke="url(#lineGradient)"
+                strokeWidth={4}
+                dot={{ fill: '#6366f1', strokeWidth: 3, r: 6, stroke: '#ffffff' }}
+                activeDot={{ 
+                  r: 8, 
+                  stroke: '#6366f1', 
+                  strokeWidth: 3,
+                  fill: '#ffffff'
+                }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+          
+          {/* Floating stats */}
+          <div className="absolute top-4 right-4 bg-white/80 backdrop-blur-sm rounded-lg p-3 shadow-lg border border-gray-100">
+            <div className="text-xs text-gray-600 font-medium">Total Expenses</div>
+            <div className="text-lg font-bold text-gray-900">
+              ${expenseFlowData.reduce((sum, item) => sum + item.total_amount, 0).toLocaleString()}
+            </div>
+          </div>
+        </div>
+        
+        <div className="mt-6 pt-4 border-t border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 rounded-full bg-gradient-to-r from-purple-500 to-blue-500"></div>
+              <span className="text-sm font-medium text-gray-700">Daily Expenses</span>
+            </div>
+            <div className="flex items-center space-x-4 text-sm">
+              <div className="flex items-center space-x-1">
+                <span className="text-gray-500">Avg:</span>
+                <span className="font-semibold text-gray-900">
+                  ${Math.round(expenseFlowData.reduce((sum, item) => sum + item.total_amount, 0) / expenseFlowData.length).toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <span className="text-gray-500">Peak:</span>
+                <span className="font-semibold text-gray-900">
+                  ${Math.max(...expenseFlowData.map(item => item.total_amount)).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    ) : (
+      <div className="h-64 flex items-center justify-center text-gray-500">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <p className="text-gray-600 font-medium">No expense data available</p>
+        </div>
+      </div>
+    )}
+  </div>
+
+  {/* Expense Categories */}
+  <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg border border-gray-100 p-2 backdrop-blur-sm">
+    <div className="flex items-center justify-between mb-6">
+      <div>
+        <h6 className="text-xl font-bold text-gray-900 mb-1">Expense Categories</h6>
+        <p className="text-sm text-gray-600">Distribution of expenses by category</p>
+      </div>
+      <div className="px-3 py-1 bg-emerald-100 rounded-full">
+        <span className="text-xs font-medium text-emerald-700">
+          {expenseCategoryData.length} Categories
+        </span>
+      </div>
+    </div>
+    
+    {expenseCategoryData.length > 0 ? (
+      <>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart 
+              data={expenseCategoryData} 
+              margin={{ top: 20, right: 0, left: 0, bottom: 0 }}
+              barCategoryGap="4%"
+            >
+              <defs>
+                {expenseCategoryData.map((entry, index) => (
+                  <linearGradient key={`bar-gradient-${index}`} id={`bar-gradient-${index}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={entry.color} stopOpacity={0.9} />
+                    <stop offset="100%" stopColor={entry.color} stopOpacity={0.7} />
+                  </linearGradient>
+                ))}
+              </defs>
+              
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.6} />
+              <XAxis 
+                dataKey="category" 
+                tick={{ fontSize: 10, fill: '#6b7280', fontWeight: '500' }}
+                axisLine={false}
+                tickLine={false}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+                interval={0}
+              />
+              <YAxis 
+                tick={{ fontSize: 12, fill: '#6b7280', fontWeight: '500' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(value) => `$${value.toLocaleString()}`}
+              />
+              <Tooltip 
+                formatter={(value) => [`$${Number(value).toLocaleString()}`, 'Amount']}
+                labelFormatter={(label) => `Category: ${label}`}
+                contentStyle={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  border: 'none',
+                  borderRadius: '12px',
+                  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                  backdropFilter: 'blur(8px)',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+              />
+              <Bar 
+                dataKey="total_expense" 
+                radius={[4, 4, 0, 0]}
+                stroke="rgba(255,255,255,0.8)"
+                strokeWidth={1}
+              >
+                {expenseCategoryData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={`url(#bar-gradient-${index})`} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        
+        {/* Compact Legend */}
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            {expenseCategoryData.slice(0, 4).map((data, index) => {
+              const totalExpenses = expenseCategoryData.reduce((sum, item) => sum + item.total_expense, 0);
+              const percentage = ((data.total_expense / totalExpenses) * 100).toFixed(1);
+              
+              return (
+                <div key={index} className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div 
+                      className="w-3 h-3 rounded-full" 
+                      style={{ backgroundColor: data.color }}
+                    ></div>
+                    <span className="text-xs font-medium text-gray-700 truncate">{data.category}</span>
+                  </div>
+                  <span className="text-xs font-bold text-gray-900">{percentage}%</span>
+                </div>
+              );
+            })}
+          </div>
+          
+          {expenseCategoryData.length > 4 && (
+            <div className="mt-2 text-center">
+              <span className="text-xs text-gray-500">
+                +{expenseCategoryData.length - 4} more categories
+              </span>
+            </div>
+          )}
+        </div>
+      </>
+    ) : (
+      <div className="h-64 flex items-center justify-center text-gray-500">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <p className="text-gray-600 font-medium">No expense categories available</p>
+        </div>
+      </div>
+    )}
+  </div>
+</div>
 
         {/* Bottom Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

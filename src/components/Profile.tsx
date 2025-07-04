@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect,useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,11 +19,17 @@ const Profile = () => {
   useEffect(() => {
     loadOrganization();
   }, []);
+    const orgId = useMemo(() => {
+      const userData = localStorage.getItem('user_data');
+      return userData ? JSON.parse(userData).organization_id : null;
+    }, []);
 
   const loadOrganization = async () => {
     try {
       // Using a dummy ID for now - you can replace this with the actual organization ID from user context
-      const orgData = await organizationService.getOrganization(1);
+      let orgData = await organizationService.getOrganization(orgId);
+      orgData=orgData.organization
+      console.log('profile org',orgData)
       setOrganization(orgData);
       setEditData({
         name: orgData.name,

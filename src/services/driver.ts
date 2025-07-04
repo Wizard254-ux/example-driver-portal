@@ -17,12 +17,14 @@ export interface CreateDriverData {
 }
 
 export interface UpdateDriverData {
-  years_of_experience?: number;
-  vehicle_type?: string;
-  license_expiry?: string;
+  years_of_experience: number;
+  vehicle_type: string;
+  license_number: string; // Add this field
+  license_expiry: string;
   bio?: string;
-  organization_id?: number; // Optional for updating organization
+  organization_id: number;
 }
+
 
 export interface Organization {
   id: number;

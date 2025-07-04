@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     proxy: {
       '/api': {
-        target: 'http://206.189.57.183:8000',
+        target: 'https://freightfusion.onrender.com',
         changeOrigin: true,
         secure: false,
         configure: (proxy, _options) => {

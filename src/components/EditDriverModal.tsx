@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, Truck } from 'lucide-react';
+import { Calendar, Truck, CreditCard } from 'lucide-react';
 import { driverService, UpdateDriverData, DriverProfile } from '../services/driver';
 import { toast } from '@/hooks/use-toast';
 
@@ -18,10 +17,11 @@ interface EditDriverModalProps {
   orgId: number; // Ensure orgId is passed correctly
 }
 
-const EditDriverModal: React.FC<EditDriverModalProps> = ({ isOpen, onClose, driver, onSuccess,orgId }) => {
+const EditDriverModal: React.FC<EditDriverModalProps> = ({ isOpen, onClose, driver, onSuccess, orgId }) => {
   const [formData, setFormData] = useState<UpdateDriverData>({
     years_of_experience: driver.years_of_experience,
     vehicle_type: driver.vehicle_type,
+    license_number: driver.license_number, // Added license_number
     license_expiry: driver.license_expiry,
     bio: driver.bio || '',
     organization_id: orgId, // Ensure orgId is passed correctly
@@ -75,6 +75,37 @@ const EditDriverModal: React.FC<EditDriverModalProps> = ({ isOpen, onClose, driv
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
+            <Label htmlFor="license_number">License Number</Label>
+            <div className="relative">
+              <CreditCard className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input
+                id="license_number"
+                type="text"
+                value={formData.license_number}
+                onChange={(e) => handleChange('license_number', e.target.value)}
+                className="pl-10"
+                placeholder="Enter license number"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="license_expiry">License Expiry</Label>
+            <div className="relative">
+              <Calendar className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input
+                id="license_expiry"
+                type="date"
+                value={formData.license_expiry}
+                onChange={(e) => handleChange('license_expiry', e.target.value)}
+                className="pl-10"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="years_of_experience">Years of Experience</Label>
             <Input
               id="years_of_experience"
@@ -103,21 +134,6 @@ const EditDriverModal: React.FC<EditDriverModalProps> = ({ isOpen, onClose, driv
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="license_expiry">License Expiry</Label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input
-                id="license_expiry"
-                type="date"
-                value={formData.license_expiry}
-                onChange={(e) => handleChange('license_expiry', e.target.value)}
-                className="pl-10"
-                required
-              />
-            </div>
           </div>
 
           <div className="space-y-2">
