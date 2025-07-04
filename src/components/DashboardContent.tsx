@@ -427,7 +427,7 @@ const DashboardContent = () => {
                         <td className="py-3 px-2 sm:px-4 min-w-0">
                           <div className="min-w-0">
                             <div className="font-medium text-sm truncate">
-                              {driver.user.first_name} {driver.user.last_name}
+                              {driver.trucks[0].driver_email}
                             </div>
                             <div className="text-xs text-gray-500 truncate">
                               {driver.user.masked_email}
