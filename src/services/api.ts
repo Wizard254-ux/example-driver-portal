@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // Create axios instance with a fallback baseURL
 const api = axios.create({
-  baseURL: 'https://freightfusion.onrender.com',
+  baseURL: 'http://localhost:8000',
   timeout: 10000000,
   withCredentials:true
 });

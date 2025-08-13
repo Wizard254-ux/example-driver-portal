@@ -1,24 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mail, User, Phone, CreditCard, Calendar, Truck, Lock, Eye, EyeOff } from 'lucide-react';
+import { Mail, User, Phone, CreditCard, Calendar, Truck, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { driverService, CreateDriverData } from '../services/driver';
+import { subscriptionService } from '../services/subscription';
 import { toast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import UpgradeSubscriptionModal from './UpgradeSubscriptionModal'
+import { SubscriptionStatus } from '../services/subscription';
 
 interface CreateDriverModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
   orgId: number;
+  onTabChange:(tab:string)=>void;
+  activeTab:string;
 }
 
 
 
-const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, onSuccess, orgId }) => {
+const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, onSuccess, orgId ,onTabChange,activeTab}) => {
   const [formData, setFormData] = useState<CreateDriverData>({
     email: '',
     first_name: '',
@@ -37,6 +43,56 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<{
+    canAddDriver: boolean;
+    currentDrivers: number;
+    maxDrivers: number;
+    remainingSlots: number;
+    error?: string;
+  }>({ canAddDriver: true, currentDrivers: 0, maxDrivers: 0, remainingSlots: 0 });
+  const [checkingSubscription, setCheckingSubscription] = useState(true);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [fullSubscriptionStatus, setFullSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
+
+  // Check subscription status when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      checkSubscriptionStatus();
+    }
+  }, [isOpen]);
+
+  const checkSubscriptionStatus = async () => {
+    setCheckingSubscription(true);
+    try {
+      // Get driver limit info
+      const result = await subscriptionService.checkDriverLimit();
+      setSubscriptionStatus({
+        canAddDriver: result.can_add_driver,
+        currentDrivers: result.current_drivers,
+        maxDrivers: result.max_drivers,
+        remainingSlots: result.remaining_slots
+      });
+      
+      // Get full subscription details for upgrade modal
+      try {
+        const fullStatus = await subscriptionService.getSubscriptionStatus();
+        setFullSubscriptionStatus(fullStatus);
+      } catch (err) {
+        console.error('Error fetching full subscription status:', err);
+      }
+    } catch (error) {
+      console.error('Error checking subscription status:', error);
+      setSubscriptionStatus({
+        canAddDriver: false,
+        currentDrivers: 0,
+        maxDrivers: 0,
+        remainingSlots: 0,
+        error: error.response?.data?.error || 'No active subscription found. Please subscribe to add drivers.'
+      });
+    } finally {
+      setCheckingSubscription(false);
+    }
+  };
 
   const vehicleTypes = [
     'Car', 'Van', 'Truck', '18-Wheeler', 'Motorcycle', 'Bus'
@@ -101,7 +157,41 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
       return;
     }
 
+    // Check subscription status before proceeding
+    if (!subscriptionStatus.canAddDriver) {
+      toast({
+        title: "Subscription Limit Reached",
+        description: subscriptionStatus.error || `Your subscription allows a maximum of ${subscriptionStatus.maxDrivers} drivers. Please upgrade your subscription to add more drivers.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
+    
+    // Double-check subscription limit with fresh backend validation
+    try {
+      const validationResult = await subscriptionService.validateDriverAddition();
+      if (!validationResult.can_add_driver) {
+        setIsLoading(false);
+        toast({
+          title: "Subscription Error",
+          description: `Driver limit reached. Your subscription allows ${validationResult.max_drivers} drivers. Currently have ${validationResult.current_drivers} drivers.`,
+          variant: "destructive",
+        });
+        // Refresh subscription status
+        await checkSubscriptionStatus();
+        return;
+      }
+    } catch (error) {
+      setIsLoading(false);
+      toast({
+        title: "Subscription Error",
+        description: error.response?.data?.error || "Unable to add more drivers with your current subscription.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       // Send all data including password and organization_id
@@ -197,7 +287,57 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {checkingSubscription ? (
+          <div className="flex items-center justify-center py-6">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <span className="ml-3">Checking subscription status...</span>
+          </div>
+        ) : !subscriptionStatus.canAddDriver ? (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Subscription Limit Reached</AlertTitle>
+            <AlertDescription>
+              {subscriptionStatus.error || `Your subscription allows a maximum of ${subscriptionStatus.maxDrivers} drivers. You currently have ${subscriptionStatus.currentDrivers} drivers. Please upgrade your subscription to add more drivers.`}
+            </AlertDescription>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button 
+                onClick={() => setShowUpgradeModal(true)}
+                variant="default"
+                className="mt-2"
+              >
+                Upgrade Subscription
+              </Button>
+              <Button 
+                onClick={() => {
+                  onClose();
+                  onTabChange('subscription');
+                }}
+                variant="outline"
+                className="mt-2"
+              >
+                View All Plans
+              </Button>
+              <Button 
+                onClick={checkSubscriptionStatus}
+                variant="outline"
+                className="mt-2"
+                disabled={checkingSubscription}
+              >
+                {checkingSubscription ? "Refreshing..." : "Refresh Status"}
+              </Button>
+            </div>
+          </Alert>
+        ) : subscriptionStatus.remainingSlots <= 2 ? (
+          <Alert className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Subscription Limit Warning</AlertTitle>
+            <AlertDescription>
+              You have {subscriptionStatus.remainingSlots} driver {subscriptionStatus.remainingSlots === 1 ? 'slot' : 'slots'} remaining in your current subscription.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        
+        <form onSubmit={handleSubmit} className="space-y-4" style={{ opacity: !subscriptionStatus.canAddDriver ? 0.5 : 1 }}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="first_name">First Name</Label>
@@ -394,11 +534,27 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button 
+              type="submit" 
+              disabled={isLoading || !subscriptionStatus.canAddDriver}
+              title={!subscriptionStatus.canAddDriver ? "Subscription limit reached" : ""}
+            >
               {isLoading ? "Creating..." : "Create Driver"}
             </Button>
           </div>
         </form>
+        
+        {/* Upgrade Subscription Modal */}
+        <UpgradeSubscriptionModal
+          isOpen={showUpgradeModal}
+          onClose={() => setShowUpgradeModal(false)}
+          currentSubscription={fullSubscriptionStatus}
+          requiredDrivers={subscriptionStatus.currentDrivers + 1}
+          onSuccess={() => {
+            setShowUpgradeModal(false);
+            checkSubscriptionStatus(); // Refresh subscription status after upgrade
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

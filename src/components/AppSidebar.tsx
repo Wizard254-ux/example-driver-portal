@@ -18,7 +18,8 @@ import {
   LogOut, 
   Truck,
   Menu,
-  ChevronLeft
+  ChevronLeft,
+  CreditCard
 } from "lucide-react"
 import { useAuth } from "../contexts/AuthContext"
 import { authService } from "../services/auth"
@@ -41,6 +42,11 @@ const menuItems = [
     id: "dashboard",
     title: "Drivers",
     icon: Users,
+  },
+  {
+    id: "subscription",
+    title: "Subscription",
+    icon: CreditCard,
   },
   {
     id: "profile",

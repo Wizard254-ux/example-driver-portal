@@ -20,7 +20,7 @@ const Register = () => {
     organization_name: '',
     organization_email_domain: '',
     organization_website: '',
-    user_type: 'admin'
+    user_type: 'org_admin'
   });
   const [activationData, setActivationData] = useState({
     uidb64: '',
@@ -30,12 +30,59 @@ const Register = () => {
   const [userEmail, setUserEmail] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
   const navigate = useNavigate();
 
+  const validateField = (name, value) => {
+    switch (name) {
+      case 'first_name':
+      case 'last_name':
+        return /^[A-Za-z]{2,}$/.test(value) ? '' : 'Must contain only letters, minimum 2 characters';
+      case 'email':
+        return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value) ? '' : 'Enter a valid email address';
+      case 'phone_number':
+        const cleanPhone = value.replace(/[\s\-\(\)\.]/g, '');
+        return cleanPhone.match(/^\d{10}$/) ? '' : 'Enter a 10-digit phone number';
+      case 'organization_name':
+        return value.length >= 2 ? '' : 'Organization name must be at least 2 characters';
+      case 'organization_email_domain':
+        return /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value) ? '' : 'Enter a valid domain (e.g., company.com)';
+      case 'organization_website':
+        return /^https?:\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(value) ? '' : 'Enter a valid URL (e.g., https://company.com)';
+      case 'password':
+        const passwordErrors = [];
+        if (value.length < 8) passwordErrors.push('at least 8 characters');
+        if (!/[A-Z]/.test(value)) passwordErrors.push('one uppercase letter');
+        if (!/[a-z]/.test(value)) passwordErrors.push('one lowercase letter');
+        if (!/\d/.test(value)) passwordErrors.push('one digit');
+        if (!/[!@#$%^&*(),.?":{}|<>]/.test(value)) passwordErrors.push('one special character');
+        return passwordErrors.length === 0 ? '' : `Password must contain ${passwordErrors.join(', ')}`;
+      case 'password_confirm':
+        return value === formData.password ? '' : 'Passwords do not match';
+      default:
+        return '';
+    }
+  };
+
   const handleChange = (e) => {
+    const { name, value } = e.target;
+    
+    // Clean phone number formatting
+    let cleanValue = value;
+    if (name === 'phone_number') {
+      cleanValue = value.replace(/[\s\-\(\)\.]/g, '');
+    }
+    
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: cleanValue
+    });
+    
+    // Real-time validation
+    const error = validateField(name, cleanValue);
+    setFieldErrors({
+      ...fieldErrors,
+      [name]: error
     });
   };
 
@@ -56,6 +103,25 @@ const Register = () => {
 
   const handleRegistrationSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate all fields before submission
+    const errors = {};
+    Object.keys(formData).forEach(field => {
+      if (field !== 'user_type') {
+        const error = validateField(field, formData[field]);
+        if (error) errors[field] = error;
+      }
+    });
+    
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast({
+        title: "Validation Error",
+        description: "Please fix the highlighted fields.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     if (formData.password !== formData.password_confirm) {
       toast({
@@ -90,14 +156,34 @@ const Register = () => {
         const responseData = error.response.data;
         
         if (responseData && typeof responseData === 'object') {
-          // Handle field validation errors dynamically
-          const errorDetails = Object.entries(responseData)
-            .map(([field, messages]) => {
-              const messageArray = Array.isArray(messages) ? messages : [messages];
-              return messageArray.join(', ');
-            })
-            .join('\n');
-          errorMessage = errorDetails;
+          // Handle field validation errors dynamically and update form field errors
+          const newFieldErrors = {};
+          const errorMessages = [];
+          
+          Object.entries(responseData).forEach(([field, messages]) => {
+            const messageArray = Array.isArray(messages) ? messages : [messages];
+            const fieldMessage = messageArray.join(', ');
+            
+            // Map backend field names to frontend field names if needed
+            const frontendFieldName = field === 'non_field_errors' ? 'general' : field;
+            
+            if (frontendFieldName !== 'general') {
+              newFieldErrors[frontendFieldName] = fieldMessage;
+            }
+            errorMessages.push(`${field === 'non_field_errors' ? 'Error' : field}: ${fieldMessage}`);
+          });
+          
+          // Update field errors for visual feedback
+          setFieldErrors(prevErrors => ({ ...prevErrors, ...newFieldErrors }));
+          
+          // Set error message for toast
+          errorMessage = errorMessages.join('\n');
+          
+          // Specific handling for common errors
+          if (responseData.email && responseData.email.some(msg => msg.includes('already exists'))) {
+            errorTitle = "Email Already Registered";
+            errorMessage = "An account with this email already exists. Please try logging in instead.";
+          }
         }
       } else if (error.request) {
         // Network error
@@ -349,10 +435,15 @@ const Register = () => {
                         placeholder="John"
                         value={formData.first_name}
                         onChange={handleChange}
-                        className="pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        className={`pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${
+                          fieldErrors.first_name ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                        }`}
                         required
                       />
                     </div>
+                    {fieldErrors.first_name && (
+                      <p className="text-red-500 text-xs mt-1">{fieldErrors.first_name}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="last_name" className="text-sm font-medium text-gray-700">
@@ -366,10 +457,15 @@ const Register = () => {
                         placeholder="Doe"
                         value={formData.last_name}
                         onChange={handleChange}
-                        className="pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        className={`pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${
+                          fieldErrors.last_name ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                        }`}
                         required
                       />
                     </div>
+                    {fieldErrors.last_name && (
+                      <p className="text-red-500 text-xs mt-1">{fieldErrors.last_name}</p>
+                    )}
                   </div>
                 </div>
                 
@@ -387,10 +483,15 @@ const Register = () => {
                       placeholder="admin@example.com"
                       value={formData.email}
                       onChange={handleChange}
-                      className="pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      className={`pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${
+                        fieldErrors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                      }`}
                       required
                     />
                   </div>
+                  {fieldErrors.email && (
+                    <p className="text-red-500 text-xs mt-1">{fieldErrors.email}</p>
+                  )}
                 </div>
 
                 {/* Phone */}
@@ -406,10 +507,16 @@ const Register = () => {
                       placeholder="1234567890"
                       value={formData.phone_number}
                       onChange={handleChange}
-                      className="pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      className={`pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${
+                        fieldErrors.phone_number ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                      }`}
+                      maxLength={10}
                       required
                     />
                   </div>
+                  {fieldErrors.phone_number && (
+                    <p className="text-red-500 text-xs mt-1">{fieldErrors.phone_number}</p>
+                  )}
                 </div>
 
                 {/* Organization Name */}
@@ -425,10 +532,15 @@ const Register = () => {
                       placeholder="Example Logistics"
                       value={formData.organization_name}
                       onChange={handleChange}
-                      className="pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      className={`pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${
+                        fieldErrors.organization_name ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                      }`}
                       required
                     />
                   </div>
+                  {fieldErrors.organization_name && (
+                    <p className="text-red-500 text-xs mt-1">{fieldErrors.organization_name}</p>
+                  )}
                 </div>
 
                 {/* Organization Email Domain */}
@@ -444,10 +556,15 @@ const Register = () => {
                       placeholder="examplelogistics.com"
                       value={formData.organization_email_domain}
                       onChange={handleChange}
-                      className="pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      className={`pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${
+                        fieldErrors.organization_email_domain ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                      }`}
                       required
                     />
                   </div>
+                  {fieldErrors.organization_email_domain && (
+                    <p className="text-red-500 text-xs mt-1">{fieldErrors.organization_email_domain}</p>
+                  )}
                 </div>
 
                 {/* Organization Website */}
@@ -463,10 +580,15 @@ const Register = () => {
                       placeholder="https://examplelogistics.com"
                       value={formData.organization_website}
                       onChange={handleChange}
-                      className="pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      className={`pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${
+                        fieldErrors.organization_website ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                      }`}
                       required
                     />
                   </div>
+                  {fieldErrors.organization_website && (
+                    <p className="text-red-500 text-xs mt-1">{fieldErrors.organization_website}</p>
+                  )}
                 </div>
 
                 {/* Password Fields */}
@@ -499,6 +621,9 @@ const Register = () => {
                         )}
                       </button>
                     </div>
+                    {fieldErrors.password && (
+                      <p className="text-red-500 text-xs mt-1">{fieldErrors.password}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="password_confirm" className="text-sm font-medium text-gray-700">
@@ -528,6 +653,9 @@ const Register = () => {
                         )}
                       </button>
                     </div>
+                    {fieldErrors.password_confirm && (
+                      <p className="text-red-500 text-xs mt-1">{fieldErrors.password_confirm}</p>
+                    )}
                   </div>
                 </div>
 

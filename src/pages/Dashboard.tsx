@@ -5,6 +5,7 @@ import DashboardContent from '../components/DashboardContent';
 import Profile from '../components/Profile';
 import Settings from '../components/Settings';
 import Landing from '../components/Landing';
+import Subscription from '../components/Subscription';
 import { organizationService } from '../services/organization';
 
 const Dashboard = () => {
@@ -49,13 +50,15 @@ const Dashboard = () => {
       case 'Landing':
         return <Landing />;
       case 'Drivers':
-        return <DashboardContent />;
+        return <DashboardContent activeTab={activeTab} onTabChange={setActiveTab}/>;
+      case 'subscription':
+        return <Subscription />;
       case 'profile':
         return <Profile />;
       case 'settings':
         return <Settings />;
       default:
-        return <DashboardContent />;
+        return <DashboardContent activeTab={activeTab} onTabChange={setActiveTab}/>;
     }
   }, [activeTab]);
 

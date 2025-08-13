@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { 
   Users, 
   Plus, 
@@ -15,10 +16,14 @@ import {
   Search,
   X,
   MoreVertical,
-  ChevronDown
+  ChevronDown,
+  CreditCard,
+  AlertCircle
 } from 'lucide-react';
 import { driverService, DriverProfile } from '../services/driver';
+import { subscriptionService } from '../services/subscription';
 import { toast } from '@/hooks/use-toast';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import CreateDriverModal from './CreateDriverModal';
 import EditDriverModal from './EditDriverModal';
 import ViewDriverModal from './ViewDriverModal';
@@ -93,7 +98,7 @@ const ActionDropdown = ({ driver, onView, onEdit, onDelete }) => {
   );
 };
 
-const DashboardContent = () => {
+const DashboardContent = ({onTabChange,activeTab}) => {
   const [drivers, setDrivers] = useState<any>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -102,6 +107,15 @@ const DashboardContent = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<DriverProfile | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [subscriptionStatus, setSubscriptionStatus] = useState<{
+    canAddDriver: boolean;
+    currentDrivers: number;
+    maxDrivers: number;
+    remainingSlots: number;
+    subscriptionName?: string;
+    error?: string;
+  }>({ canAddDriver: true, currentDrivers: 0, maxDrivers: 0, remainingSlots: 0 });
+  const [loadingSubscription, setLoadingSubscription] = useState(true);
 
   const orgId = useMemo(() => {
     const userData = localStorage.getItem('user_data');
@@ -163,8 +177,34 @@ const DashboardContent = () => {
     }
   };
 
+  const fetchSubscriptionStatus = async () => {
+    setLoadingSubscription(true);
+    try {
+      const result = await subscriptionService.checkDriverLimit();
+      setSubscriptionStatus({
+        canAddDriver: result.can_add_driver,
+        currentDrivers: result.current_drivers,
+        maxDrivers: result.max_drivers,
+        remainingSlots: result.remaining_slots,
+        subscriptionName: result.subscription_name
+      });
+    } catch (error) {
+      console.error('Error checking subscription status:', error);
+      setSubscriptionStatus({
+        canAddDriver: false,
+        currentDrivers: 0,
+        maxDrivers: 0,
+        remainingSlots: 0,
+        error: error.response?.data?.error || 'No active subscription found. Please subscribe to add drivers.'
+      });
+    } finally {
+      setLoadingSubscription(false);
+    }
+  };
+
   useEffect(() => {
     loadDrivers();
+    fetchSubscriptionStatus();
   }, []);
 
   const loadDrivers = async (forceRefresh = false) => {
@@ -181,10 +221,10 @@ const DashboardContent = () => {
 
       const response = await driverService.getDrivers();
       console.log('fetched drivers ',response);
-      setDrivers(response.results);
+      setDrivers(response);
       
       // Cache the fresh data
-      setCachedData(response.results);
+      setCachedData(response);
       
     } catch (error) {
       toast({
@@ -422,12 +462,13 @@ const DashboardContent = () => {
                     </tr>
                   </thead>
                   <tbody className='ozverflow-y-auto'>
-                    {filteredDrivers?.length>0&&filteredDrivers.map((driver) => (
+                    {Array.isArray(filteredDrivers) &&filteredDrivers?.length>0&&filteredDrivers.map((driver) => (
+                      
                       <tr key={driver.id} className="border-b hover:bg-gray-50">
                         <td className="py-3 px-2 sm:px-4 min-w-0">
                           <div className="min-w-0">
                             <div className="font-medium text-sm truncate">
-                              {driver.trucks[0].driver_email}
+                              {driver?.trucks?.[0].driver_email}
                             </div>
                             <div className="text-xs text-gray-500 truncate">
                               {driver.user.masked_email}
@@ -513,6 +554,8 @@ const DashboardContent = () => {
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         orgId={orgId}
+        onTabChange={onTabChange}
+        activeTab={activeTab}
         onSuccess={() => {
           setShowCreateModal(false);
           handleModalSuccess();

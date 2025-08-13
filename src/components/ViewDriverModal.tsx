@@ -48,9 +48,10 @@ const ViewDriver: React.FC<DriverDataModalProps> = ({
   const fetchDriverData = async () => {
     setLoading(true);
     setError(null);
+    console.log('fetchign driver ',driver)
     try {
       console.log('fetchig data fro driver ',driver)
-      const response = await organizationService.getDriverInfo(driver.user);
+      const response = await organizationService.getDriverInfo(driver.user.id);
       setDriverData(response.driver);
     } catch (err) {
       setError('Failed to fetch driver data');
