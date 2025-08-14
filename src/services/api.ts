@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // Create axios instance with a fallback baseURL
 const api = axios.create({
-  baseURL: 'http://a23db48ead06.ngrok-free.app',
+  baseURL: 'https://a23db48ead06.ngrok-free.app',
   timeout: 10000000,
   withCredentials:true
 });
