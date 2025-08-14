@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // Create axios instance with a fallback baseURL
 const api = axios.create({
-  baseURL: '',
+  baseURL: 'https://example-driver-portal.vercel.app',
   timeout: 10000000,
   withCredentials:true
 });
