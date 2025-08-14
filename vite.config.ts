@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'https://a23db48ead06.ngrok-free.app',
         changeOrigin: true,
         secure: false,
         configure: (proxy, _options) => {
