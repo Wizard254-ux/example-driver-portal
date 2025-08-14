@@ -43,6 +43,7 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
+  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
   const [subscriptionStatus, setSubscriptionStatus] = useState<{
     canAddDriver: boolean;
     currentDrivers: number;
@@ -120,21 +121,103 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
     return errors;
   };
 
+  const validateField = (field: string, value: any): string => {
+    switch (field) {
+      case 'first_name':
+        if (!value || value.trim().length < 2) return 'First name must be at least 2 characters';
+        if (!/^[a-zA-Z\s'-]+$/.test(value)) return 'First name can only contain letters, spaces, hyphens, and apostrophes';
+        break;
+      case 'last_name':
+        if (!value || value.trim().length < 2) return 'Last name must be at least 2 characters';
+        if (!/^[a-zA-Z\s'-]+$/.test(value)) return 'Last name can only contain letters, spaces, hyphens, and apostrophes';
+        break;
+      case 'email':
+        if (!value) return 'Email is required';
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Please enter a valid email address';
+        break;
+      case 'phone_number':
+        if (!value) return 'Phone number is required';
+        if (!/^\d{10}$/.test(value.replace(/\D/g, ''))) return 'Phone number must be 10 digits';
+        break;
+      case 'license_number':
+        if (!value || value.trim().length < 5) return 'License number must be at least 5 characters';
+        if (!/^[a-zA-Z0-9]+$/.test(value)) return 'License number can only contain letters and numbers';
+        break;
+      case 'license_expiry':
+        if (!value) return 'License expiry date is required';
+        const expiryDate = new Date(value);
+        const today = new Date();
+        if (expiryDate <= today) return 'License expiry date must be in the future';
+        break;
+      case 'years_of_experience':
+        if (value < 0) return 'Years of experience cannot be negative';
+        if (value > 50) return 'Years of experience seems too high';
+        break;
+      case 'vehicle_type':
+        if (!value) return 'Vehicle type is required';
+        break;
+    }
+    return '';
+  };
+
+  const validateAllFields = (): boolean => {
+    const errors: {[key: string]: string} = {};
+    
+    Object.keys(formData).forEach(key => {
+      if (key !== 'bio' && key !== 'organization_id' && key !== 'password' && key !== 'password_confirm') {
+        const error = validateField(key, formData[key as keyof CreateDriverData]);
+        if (error) errors[key] = error;
+      }
+    });
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleChange = (field: keyof CreateDriverData, value: string | number) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
 
+    // Clear field error when user starts typing
+    if (formErrors[field]) {
+      setFormErrors(prev => ({
+        ...prev,
+        [field]: ''
+      }));
+    }
+
     // Validate password in real-time
     if (field === 'password') {
       const errors = validatePassword(value as string);
       setPasswordErrors(errors);
     }
+
+    // Validate other fields on blur (we'll add onBlur handlers)
+    if (field !== 'password' && field !== 'password_confirm' && field !== 'bio' && field !== 'organization_id') {
+      const error = validateField(field, value);
+      if (error) {
+        setFormErrors(prev => ({
+          ...prev,
+          [field]: error
+        }));
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate all fields first
+    if (!validateAllFields()) {
+      toast({
+        title: "Validation Error",
+        description: "Please fix the errors in the form before submitting.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     // Validate password
     const passwordValidationErrors = validatePassword(formData.password);
@@ -216,22 +299,52 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
         organization_id: orgId
       });
       setPasswordErrors([]);
-    } catch (error) {
+      setFormErrors({});
+    } catch (error: any) {
       console.error('Registration error:', error);
       
-      // Try to extract error details from the response
+      // Handle Axios error format specifically
       if (error.response && error.response.data) {
         const errorData = error.response.data;
         
-        // Check if we have structured validation errors
-        if (errorData.errors) {
-          // Format field-specific errors
-          const errorMessages = [];
-          Object.keys(errorData.errors).forEach(field => {
-            const fieldErrors = errorData.errors[field];
-            const fieldName = field.charAt(0).toUpperCase() + field.slice(1).replace('_', ' ');
-            errorMessages.push(`${fieldName}: ${fieldErrors.join(', ')}`);
+        // Handle field-specific errors (like email already exists)
+        if (typeof errorData === 'object' && !errorData.error && !errorData.errors) {
+          const fieldErrors: {[key: string]: string} = {};
+          const errorMessages: string[] = [];
+          
+          Object.keys(errorData).forEach(field => {
+            const fieldErrorArray = errorData[field];
+            if (Array.isArray(fieldErrorArray)) {
+              const fieldName = field.charAt(0).toUpperCase() + field.slice(1).replace('_', ' ');
+              const errorMessage = fieldErrorArray[0]; // Take first error
+              fieldErrors[field] = errorMessage;
+              errorMessages.push(`${fieldName}: ${errorMessage}`);
+            }
           });
+          
+          // Set field-specific errors
+          setFormErrors(fieldErrors);
+          
+          toast({
+            title: "Validation Error",
+            description: errorMessages.join('\n'),
+            variant: "destructive",
+          });
+        }
+        // Check if we have structured validation errors
+        else if (errorData.errors) {
+          const fieldErrors: {[key: string]: string} = {};
+          const errorMessages: string[] = [];
+          
+          Object.keys(errorData.errors).forEach(field => {
+            const fieldErrorArray = errorData.errors[field];
+            const fieldName = field.charAt(0).toUpperCase() + field.slice(1).replace('_', ' ');
+            const errorMessage = Array.isArray(fieldErrorArray) ? fieldErrorArray[0] : fieldErrorArray;
+            fieldErrors[field] = errorMessage;
+            errorMessages.push(`${fieldName}: ${errorMessage}`);
+          });
+          
+          setFormErrors(fieldErrors);
           
           toast({
             title: "Validation Error",
@@ -265,6 +378,13 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
         }
       } 
       // Network or other errors
+      else if (error.code === 'ERR_BAD_REQUEST' || error.name === 'AxiosError') {
+        toast({
+          title: "Request Error",
+          description: error.message || "Bad request. Please check your input and try again.",
+          variant: "destructive",
+        });
+      }
       else {
         toast({
           title: "Network Error",
@@ -300,13 +420,7 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
               {subscriptionStatus.error || `Your subscription allows a maximum of ${subscriptionStatus.maxDrivers} drivers. You currently have ${subscriptionStatus.currentDrivers} drivers. Please upgrade your subscription to add more drivers.`}
             </AlertDescription>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button 
-                onClick={() => setShowUpgradeModal(true)}
-                variant="default"
-                className="mt-2"
-              >
-                Upgrade Subscription
-              </Button>
+
               <Button 
                 onClick={() => {
                   onClose();
@@ -348,10 +462,17 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
                   placeholder="John"
                   value={formData.first_name}
                   onChange={(e) => handleChange('first_name', e.target.value)}
-                  className="pl-10"
+                  onBlur={(e) => {
+                    const error = validateField('first_name', e.target.value);
+                    setFormErrors(prev => ({ ...prev, first_name: error }));
+                  }}
+                  className={`pl-10 ${formErrors.first_name ? 'border-red-500' : ''}`}
                   required
                 />
               </div>
+              {formErrors.first_name && (
+                <div className="text-sm text-red-500 mt-1">{formErrors.first_name}</div>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="last_name">Last Name</Label>
@@ -362,10 +483,17 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
                   placeholder="Doe"
                   value={formData.last_name}
                   onChange={(e) => handleChange('last_name', e.target.value)}
-                  className="pl-10"
+                  onBlur={(e) => {
+                    const error = validateField('last_name', e.target.value);
+                    setFormErrors(prev => ({ ...prev, last_name: error }));
+                  }}
+                  className={`pl-10 ${formErrors.last_name ? 'border-red-500' : ''}`}
                   required
                 />
               </div>
+              {formErrors.last_name && (
+                <div className="text-sm text-red-500 mt-1">{formErrors.last_name}</div>
+              )}
             </div>
           </div>
 
@@ -379,10 +507,17 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
                 placeholder="driver@example.com"
                 value={formData.email}
                 onChange={(e) => handleChange('email', e.target.value)}
-                className="pl-10"
+                onBlur={(e) => {
+                  const error = validateField('email', e.target.value);
+                  setFormErrors(prev => ({ ...prev, email: error }));
+                }}
+                className={`pl-10 ${formErrors.email ? 'border-red-500' : ''}`}
                 required
               />
             </div>
+            {formErrors.email && (
+              <div className="text-sm text-red-500 mt-1">{formErrors.email}</div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -394,10 +529,17 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
                 placeholder="1234567890"
                 value={formData.phone_number}
                 onChange={(e) => handleChange('phone_number', e.target.value)}
-                className="pl-10"
+                onBlur={(e) => {
+                  const error = validateField('phone_number', e.target.value);
+                  setFormErrors(prev => ({ ...prev, phone_number: error }));
+                }}
+                className={`pl-10 ${formErrors.phone_number ? 'border-red-500' : ''}`}
                 required
               />
             </div>
+            {formErrors.phone_number && (
+              <div className="text-sm text-red-500 mt-1">{formErrors.phone_number}</div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -468,10 +610,17 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
                 placeholder="DL1234567"
                 value={formData.license_number}
                 onChange={(e) => handleChange('license_number', e.target.value)}
-                className="pl-10"
+                onBlur={(e) => {
+                  const error = validateField('license_number', e.target.value);
+                  setFormErrors(prev => ({ ...prev, license_number: error }));
+                }}
+                className={`pl-10 ${formErrors.license_number ? 'border-red-500' : ''}`}
                 required
               />
             </div>
+            {formErrors.license_number && (
+              <div className="text-sm text-red-500 mt-1">{formErrors.license_number}</div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -484,10 +633,17 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
                   type="date"
                   value={formData.license_expiry}
                   onChange={(e) => handleChange('license_expiry', e.target.value)}
-                  className="pl-10"
+                  onBlur={(e) => {
+                    const error = validateField('license_expiry', e.target.value);
+                    setFormErrors(prev => ({ ...prev, license_expiry: error }));
+                  }}
+                  className={`pl-10 ${formErrors.license_expiry ? 'border-red-500' : ''}`}
                   required
                 />
               </div>
+              {formErrors.license_expiry && (
+                <div className="text-sm text-red-500 mt-1">{formErrors.license_expiry}</div>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="years_of_experience">Years of Experience</Label>
@@ -498,14 +654,29 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
                 placeholder="5"
                 value={formData.years_of_experience}
                 onChange={(e) => handleChange('years_of_experience', parseInt(e.target.value) || 0)}
+                onBlur={(e) => {
+                  const error = validateField('years_of_experience', parseInt(e.target.value) || 0);
+                  setFormErrors(prev => ({ ...prev, years_of_experience: error }));
+                }}
+                className={formErrors.years_of_experience ? 'border-red-500' : ''}
                 required
               />
             </div>
+            {formErrors.years_of_experience && (
+              <div className="text-sm text-red-500 mt-1">{formErrors.years_of_experience}</div>
+            )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="vehicle_type">Vehicle Type</Label>
-            <Select onValueChange={(value) => handleChange('vehicle_type', value)} required>
+            <Select 
+              onValueChange={(value) => {
+                handleChange('vehicle_type', value);
+                const error = validateField('vehicle_type', value);
+                setFormErrors(prev => ({ ...prev, vehicle_type: error }));
+              }} 
+              required
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select vehicle type" />
               </SelectTrigger>
@@ -517,6 +688,9 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
                 ))}
               </SelectContent>
             </Select>
+            {formErrors.vehicle_type && (
+              <div className="text-sm text-red-500 mt-1">{formErrors.vehicle_type}</div>
+            )}
           </div>
 
           <div className="space-y-2">

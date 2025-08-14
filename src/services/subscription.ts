@@ -152,6 +152,7 @@ export const subscriptionService = {
 
   async getSubscriptionStatus(): Promise<SubscriptionStatus> {
     const response = await api.get('/api/payment/subscription-status/');
+    console.log('subscription status response:', response.data);
     return response.data;
   },
 
@@ -321,6 +322,23 @@ export const subscriptionService = {
     policy?: string;
   }> {
     const response = await api.post('/api/payment/check-downgrade-allowed/', {
+      subscription_id: subscriptionId
+    });
+    return response.data;
+  },
+
+  async validateSubscriptionEligibility(subscriptionId: number): Promise<{
+    eligible: boolean;
+    error?: string;
+    current_drivers?: number;
+    plan_limit?: number;
+    drivers_to_remove?: number;
+    plan_name?: string;
+    validation_type?: string;
+    message?: string;
+    available_slots?: number;
+  }> {
+    const response = await api.post('/api/payment/validate-subscription/', {
       subscription_id: subscriptionId
     });
     return response.data;

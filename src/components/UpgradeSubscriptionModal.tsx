@@ -476,7 +476,7 @@ export const UpgradeSubscriptionModal: React.FC<UpgradeSubscriptionModalProps> =
                 className="gap-2"
               >
                 <CreditCard className="h-4 w-4" />
-                {upgrading ? "Processing..." : "Change Plan"}
+                {upgrading ? "Processing..." : "Subscribe Plan"}
               </Button>
             </div>
           </>

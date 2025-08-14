@@ -25,10 +25,13 @@ const Subscription = () => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showBlockedModal, setShowBlockedModal] = useState(false);
   const [blockedInfo, setBlockedInfo] = useState<{message: string; policy: string; days_elapsed: number; days_until_allowed: number} | null>(null);
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [validationError, setValidationError] = useState<{title: string; message: string; details?: string} | null>(null);
   const [selectedPlanForUpgrade, setSelectedPlanForUpgrade] = useState<number | null>(null);
   const [monthFilter, setMonthFilter] = useState<string>('all');
   const [availableMonths, setAvailableMonths] = useState<number[]>([]);
   const [subscriptionLimits, setSubscriptionLimits] = useState<SubscriptionLimits | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("current");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -48,6 +51,9 @@ const Subscription = () => {
         setSubscriptionStatus(status);
         setPaymentHistory(history.sort((a, b) => b.id - a.id));
         setSubscriptionLimits(limits);
+        
+        // Set initial tab to current subscription
+        setActiveTab("current");
 
         // Extract unique months for filtering
         const months = [...new Set(subs.map(sub => sub.duration_months))].sort((a, b) => a - b);
@@ -68,48 +74,79 @@ const Subscription = () => {
   }, []); // Only run once on component mount
 
   const handleSubscribe = async (subscriptionId: number) => {
-    // Check subscription limits before showing modal
-    if (subscriptionStatus?.has_subscription && subscriptionLimits) {
-      const selectedPlan = subscriptions.find(s => s.id === subscriptionId);
-      const currentAmount = parseFloat(subscriptionStatus.amount || '0');
-      const newAmount = parseFloat(selectedPlan?.amount || '0');
-      const isUpgrade = newAmount > currentAmount;
-      const isDowngrade = newAmount < currentAmount;
+    try {
+      // STEP 1: Pre-validate subscription eligibility (driver limits)
+      const validationData = await subscriptionService.validateSubscriptionEligibility(subscriptionId);
       
-      if ((isUpgrade && !subscriptionLimits.limits.upgrade.allowed) || 
-          (isDowngrade && !subscriptionLimits.limits.downgrade.allowed)) {
-        const changeType = isUpgrade ? 'upgrade' : 'downgrade';
-        toast({
-          title: "Monthly Limit Reached",
-          description: `You can only ${changeType} once per month. Try again next month.`,
-          variant: "destructive"
-        });
+      if (!validationData.eligible) {
+        // Show validation error in dialog
+        if (validationData.validation_type === 'driver_limit_exceeded') {
+          setValidationError({
+            title: "Driver Limit Exceeded",
+            message: validationData.error || 'Cannot subscribe to this plan',
+            details: `You need to remove ${validationData.drivers_to_remove} drivers before subscribing to ${validationData.plan_name}. Current: ${validationData.current_drivers}, Plan limit: ${validationData.plan_limit}`
+          });
+        } else {
+          setValidationError({
+            title: "Subscription Not Available",
+            message: validationData.error || 'This subscription is not available',
+          });
+        }
+        setShowValidationModal(true);
         return;
       }
       
-      // Check 5-25 day blocking period for downgrades
-      if (isDowngrade) {
-        try {
-          const downgradeCheck = await subscriptionService.checkDowngradeAllowed(subscriptionId);
-          if (!downgradeCheck.allowed && downgradeCheck.blocked_period) {
-            setBlockedInfo({
-              message: downgradeCheck.message || '',
-              policy: downgradeCheck.policy || '',
-              days_elapsed: downgradeCheck.days_elapsed || 0,
-              days_until_allowed: downgradeCheck.days_until_allowed || 0
-            });
-            setShowBlockedModal(true);
-            return;
+      // STEP 2: Check subscription limits (monthly change limits)
+      if (subscriptionStatus?.has_subscription && subscriptionLimits) {
+        const selectedPlan = subscriptions.find(s => s.id === subscriptionId);
+        const currentAmount = parseFloat(subscriptionStatus.amount || '0');
+        const newAmount = parseFloat(selectedPlan?.amount || '0');
+        const isUpgrade = newAmount > currentAmount;
+        const isDowngrade = newAmount < currentAmount;
+        
+        if ((isUpgrade && !subscriptionLimits.limits.upgrade.allowed) || 
+            (isDowngrade && !subscriptionLimits.limits.downgrade.allowed)) {
+          const changeType = isUpgrade ? 'upgrade' : 'downgrade';
+          toast({
+            title: "Monthly Limit Reached",
+            description: `You can only ${changeType} once per month. Try again next month.`,
+            variant: "destructive"
+          });
+          return;
+        }
+        
+        // STEP 3: Check 5-25 day blocking period for downgrades
+        if (isDowngrade) {
+          try {
+            const downgradeCheck = await subscriptionService.checkDowngradeAllowed(subscriptionId);
+            if (!downgradeCheck.allowed && downgradeCheck.blocked_period) {
+              setBlockedInfo({
+                message: downgradeCheck.message || '',
+                policy: downgradeCheck.policy || '',
+                days_elapsed: downgradeCheck.days_elapsed || 0,
+                days_until_allowed: downgradeCheck.days_until_allowed || 0
+              });
+              setShowBlockedModal(true);
+              return;
+            }
+          } catch (error) {
+            console.error('Error checking downgrade permission:', error);
           }
-        } catch (error) {
-          console.error('Error checking downgrade permission:', error);
         }
       }
+      
+      // All validations passed - proceed with subscription
+      setSelectedPlanForUpgrade(subscriptionId);
+      setShowUpgradeModal(true);
+      
+    } catch (error) {
+      console.error('Validation error:', error);
+      toast({
+        title: "Validation Error",
+        description: "Unable to validate subscription. Please try again.",
+        variant: "destructive",
+      });
     }
-    
-    // Show the upgrade modal with specific plan preselected
-    setSelectedPlanForUpgrade(subscriptionId);
-    setShowUpgradeModal(true);
   };
 
   const handleGeneralUpgrade = () => {
@@ -123,9 +160,8 @@ const Subscription = () => {
       return;
     }
     
-    // Show upgrade modal with all plans
-    setSelectedPlanForUpgrade(null);
-    setShowUpgradeModal(true);
+    // Switch to Available Plans tab instead of showing modal
+    setActiveTab("plans");
   };
 
   const formatDate = (dateString: string) => {
@@ -170,15 +206,15 @@ const Subscription = () => {
     <div className="container mx-auto py-6">
       <h1 className="text-3xl font-bold mb-6">Subscription Management</h1>
 
-      <Tabs defaultValue={subscriptionStatus?.has_subscription ? "current" : "plans"} className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="mb-6">
-          <TabsTrigger value="current">Current Subscription</TabsTrigger>
-          <TabsTrigger value="plans">Available Plans</TabsTrigger>
-          <TabsTrigger value="history">Payment History</TabsTrigger>
+          <TabsTrigger value="current" className="text-xs sm:text-sm px-2 sm:px-4">Current Subscription</TabsTrigger>
+          <TabsTrigger value="plans" className="text-xs sm:text-sm px-2 sm:px-4">Available Plans</TabsTrigger>
+          <TabsTrigger value="history" className="text-xs sm:text-sm px-2 sm:px-4">Payment History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="current">
-          {subscriptionStatus?.has_subscription ? (
+          {subscriptionStatus?.has_subscription || subscriptionStatus?.subscription_name ? (
             <div className="space-y-6">
               <Card>
                 <CardHeader>
@@ -201,7 +237,7 @@ const Subscription = () => {
                         </span>
                       ) : (
                         <span className="flex items-center gap-1">
-                          <AlertCircle className="h-4 w-4" /> {subscriptionStatus.is_expired ? 'Expired' : subscriptionStatus.status}
+                          <AlertCircle className="h-4 w-4" /> {subscriptionStatus.status === 'expired' ? 'Expired' : (subscriptionStatus.is_expired ? 'Expired' : subscriptionStatus.status)}
                         </span>
                       )}
                     </Badge>
@@ -252,7 +288,7 @@ const Subscription = () => {
                   )}
                 </CardContent>
                 <CardFooter className="flex flex-col space-y-4">
-                  {subscriptionStatus.is_expired && (
+                  {(subscriptionStatus.is_expired || subscriptionStatus.status === 'expired') && (
                     <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-md p-3 w-full">
                       <div className="flex items-center gap-2">
                         <AlertCircle className="h-4 w-4" />
@@ -282,21 +318,48 @@ const Subscription = () => {
                   )}
 
                   <div className="flex gap-2 w-full">
-                    <Button
-                      onClick={handleGeneralUpgrade}
-                      className="flex-1"
-                      disabled={subscriptionLimits && !subscriptionLimits.limits.upgrade.allowed && !subscriptionLimits.limits.downgrade.allowed}
-                    >
-                      <ArrowUpRight className="h-4 w-4 mr-2" />
-                      {subscriptionLimits && !subscriptionLimits.limits.upgrade.allowed && !subscriptionLimits.limits.downgrade.allowed ? 'Change Limit Reached' : 'Change Plan'}
-                    </Button>
-                    <Button
-                      onClick={() => setShowCancelModal(true)}
-                      variant="destructive"
-                      className="flex-1"
-                    >
-                      Cancel Subscription
-                    </Button>
+                    {subscriptionStatus.has_subscription ? (
+                      <>
+                        <Button
+                          onClick={handleGeneralUpgrade}
+                          className="flex-1"
+                          disabled={subscriptionLimits && !subscriptionLimits.limits.upgrade.allowed && !subscriptionLimits.limits.downgrade.allowed}
+                        >
+                          <ArrowUpRight className="h-4 w-4 mr-2" />
+                          {subscriptionLimits && !subscriptionLimits.limits.upgrade.allowed && !subscriptionLimits.limits.downgrade.allowed ? 'Change Limit Reached' : 'Change Plan'}
+                        </Button>
+                        <Button
+                          onClick={() => setShowCancelModal(true)}
+                          variant="destructive"
+                          className="flex-1"
+                        >
+                          Cancel Subscription
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        onClick={() => {
+                          // Find the subscription ID that matches the expired subscription
+                          const expiredSubscription = subscriptions.find(sub => 
+                            sub.name === subscriptionStatus.subscription_name &&
+                            sub.duration_months === subscriptionStatus.duration_months &&
+                            sub.max_drivers === subscriptionStatus.max_drivers
+                          );
+                          
+                          if (expiredSubscription) {
+                            setSelectedPlanForUpgrade(expiredSubscription.id);
+                            setShowUpgradeModal(true);
+                          } else {
+                            // Fallback to plans tab if subscription not found
+                            setActiveTab("plans");
+                          }
+                        }}
+                        className="w-full"
+                      >
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        Renew Subscription
+                      </Button>
+                    )}
                   </div>
                 </CardFooter>
               </Card>
@@ -305,9 +368,9 @@ const Subscription = () => {
             <Card>
               <CardContent className="text-center py-12">
                 <AlertCircle className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium mb-2">No Active Subscription</h3>
-                <p className="text-gray-500 mb-4">You don't have an active subscription. Choose a plan to get started.</p>
-                <Button onClick={handleGeneralUpgrade}>
+                <h3 className="text-lg font-medium mb-2">No Subscription History</h3>
+                <p className="text-gray-500 mb-4">You haven't subscribed to any plans yet. Choose a plan to get started.</p>
+                <Button onClick={() => setActiveTab("plans")}>
                   <CreditCard className="h-4 w-4 mr-2" />
                   Choose a Plan
                 </Button>
@@ -543,6 +606,31 @@ const Subscription = () => {
           </div>
           <DialogFooter>
             <Button onClick={() => setShowBlockedModal(false)}>Understood</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Validation Error Modal */}
+      <Dialog open={showValidationModal} onOpenChange={setShowValidationModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+              {validationError?.title}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-sm text-red-800 mb-2">{validationError?.message}</p>
+              {validationError?.details && (
+                <div className="text-xs text-red-700">
+                  <strong>Details:</strong> {validationError.details}
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowValidationModal(false)}>Understood</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
