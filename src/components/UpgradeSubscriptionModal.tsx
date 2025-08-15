@@ -658,7 +658,7 @@ export const UpgradeSubscriptionModal: React.FC<UpgradeSubscriptionModalProps> =
                           </div>
                           <div className="flex justify-between font-medium border-t pt-2 mt-2">
                             <span>Total Amount:</span>
-                            <span className="text-lg">${(parseFloat(proration?.tax_to_pay || '0') + subtotal).toFixed(2)}</span>
+                            <span className="text-lg">${taxInfo.total_amount.toFixed(2)}</span>
                           </div>
                         </>
                       );
