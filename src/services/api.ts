@@ -1,27 +1,11 @@
 
 import axios from 'axios';
 
-// Determine the base URL based on the environment
-const getBaseURL = () => {
-  // Check if we want to force direct connection (useful for debugging)
-  if (import.meta.env.VITE_USE_DIRECT_API === 'true') {
-    return 'https://a23db48ead06.ngrok-free.app';
-  }
-  
-  // In development, use relative URLs so Vite proxy handles the routing
-  if (import.meta.env.DEV) {
-    return '';
-  }
-  
-  // In production, use your ngrok backend URL
-  return 'https://a23db48ead06.ngrok-free.app';
-};
-
-// Create axios instance with environment-aware baseURL
+// Create axios instance with a fallback baseURL
 const api = axios.create({
-  baseURL: getBaseURL(),
+  baseURL: 'https://a23db48ead06.ngrok-free.app',
   timeout: 10000000,
-  withCredentials: true // Re-enabled since proxy handles CORS
+  withCredentials:true
 });
 
 // Request interceptor to add auth token
@@ -31,12 +15,6 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
-    // Always add ngrok header when connecting to ngrok URLs
-    if (config.baseURL?.includes('ngrok') || config.url?.includes('ngrok')) {
-      config.headers['ngrok-skip-browser-warning'] = 'true';
-    }
-    
     return config;
   },
   (error) => {
