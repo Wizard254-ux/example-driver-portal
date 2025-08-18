@@ -114,7 +114,8 @@ const EditDriverModal: React.FC<EditDriverModalProps> = ({ isOpen, onClose, driv
     console.log(formData)
 
     try {
-      await driverService.updateDriver(driver.id, formData);
+      console.log('Submitting form data:', driver);
+      await driverService.updateDriver(driver.user.id, formData);
       toast({
         title: "Success",
         description: "Driver profile updated successfully.",

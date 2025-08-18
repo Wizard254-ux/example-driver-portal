@@ -24,6 +24,7 @@ import { driverService, DriverProfile } from '../services/driver';
 import { subscriptionService } from '../services/subscription';
 import { toast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import CreateDriverModal from './CreateDriverModal';
 import EditDriverModal from './EditDriverModal';
 import ViewDriverModal from './ViewDriverModal';
@@ -84,7 +85,7 @@ const ActionDropdown = ({ driver, onView, onEdit, onDelete }) => {
                 Edit
               </button>
               <button
-                onClick={() => handleAction(() => onDelete(driver.id))}
+                onClick={() => handleAction(() => onDelete(driver.user.id, `${driver.user.first_name} ${driver.user.last_name}`))}
                 className="w-full px-3 py-2 text-sm text-left hover:bg-gray-50 text-red-600 flex items-center gap-2"
               >
                 <Trash2 className="h-4 w-4" />
@@ -107,6 +108,8 @@ const DashboardContent = ({onTabChange,activeTab}) => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<DriverProfile | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [driverToDelete, setDriverToDelete] = useState<{id: number, name: string} | null>(null);
   const [subscriptionStatus, setSubscriptionStatus] = useState<{
     canAddDriver: boolean;
     currentDrivers: number;
@@ -247,27 +250,35 @@ const DashboardContent = ({onTabChange,activeTab}) => {
     });
   };
 
-  const handleDeleteDriver = async (id: number) => {
-    if (window.confirm('Are you sure you want to delete this driver?')) {
-      try {
-        await driverService.deleteDriver(id);
-        const updatedDrivers = drivers.filter(driver => driver.id !== id);
-        setDrivers(updatedDrivers);
-        
-        // Update cache with new data
-        setCachedData(updatedDrivers);
-        
-        toast({
-          title: "Success",
-          description: "Driver deleted successfully.",
-        });
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to delete driver.",
-          variant: "destructive",
-        });
-      }
+  const handleDeleteDriver = (userId: number, driverName: string) => {
+    setDriverToDelete({ id: userId, name: driverName });
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDeleteDriver = async () => {
+    if (!driverToDelete) return;
+    
+    try {
+      await driverService.deleteDriver(driverToDelete.id);
+      const updatedDrivers = drivers.filter(driver => driver.user.id !== driverToDelete.id);
+      setDrivers(updatedDrivers);
+      
+      // Update cache with new data
+      setCachedData(updatedDrivers);
+      
+      toast({
+        title: "Success",
+        description: "Driver deleted successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete driver.",
+        variant: "destructive",
+      });
+    } finally {
+      setShowDeleteDialog(false);
+      setDriverToDelete(null);
     }
   };
 
@@ -523,7 +534,7 @@ const DashboardContent = ({onTabChange,activeTab}) => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleDeleteDriver(driver.id)}
+                              onClick={() => handleDeleteDriver(driver.user.id, `${driver.user.first_name} ${driver.user.last_name}`)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -589,6 +600,30 @@ const DashboardContent = ({onTabChange,activeTab}) => {
           />
         </>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-500" />
+              Delete Driver
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{driverToDelete?.name}</strong>? This action cannot be undone and will permanently remove the driver profile and all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteDriver}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete Driver
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
