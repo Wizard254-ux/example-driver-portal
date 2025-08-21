@@ -5,6 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Truck, Mail, Lock, User, Phone, Building, Globe, Package, MapPin, TrendingUp, Shield, Users, Clock, CheckCircle, Key, Eye, EyeOff } from 'lucide-react';
+import PhoneInput from 'react-phone-number-input';
+import { isValidPhoneNumber } from 'react-phone-number-input';
+import 'react-phone-number-input/style.css';
+import '../components/phone-input.css';
 import { authService } from '../services/auth';
 import { toast } from '@/hooks/use-toast';
 
@@ -41,12 +45,13 @@ const Register = () => {
       case 'email':
         return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value) ? '' : 'Enter a valid email address';
       case 'phone_number':
-        const cleanPhone = value.replace(/[\s\-\(\)\.]/g, '');
-        return cleanPhone.match(/^\d{10}$/) ? '' : 'Enter a 10-digit phone number';
+        if (!value) return 'Phone number is required';
+        if (!isValidPhoneNumber(value)) return 'Please enter a valid phone number';
+        return '';
       case 'organization_name':
         return value.length >= 2 ? '' : 'Organization name must be at least 2 characters';
       case 'organization_email_domain':
-        return /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value) ? '' : 'Enter a valid domain (e.g., company.com)';
+        return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?$/.test(value) ? '' : 'Enter a valid email address (e.g., admin@company.com)';
       case 'organization_website':
         return /^https?:\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(value) ? '' : 'Enter a valid URL (e.g., https://company.com)';
       case 'password':
@@ -67,22 +72,30 @@ const Register = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     
-    // Clean phone number formatting
-    let cleanValue = value;
-    if (name === 'phone_number') {
-      cleanValue = value.replace(/[\s\-\(\)\.]/g, '');
-    }
-    
     setFormData({
       ...formData,
-      [name]: cleanValue
+      [name]: value
     });
     
     // Real-time validation
-    const error = validateField(name, cleanValue);
+    const error = validateField(name, value);
     setFieldErrors({
       ...fieldErrors,
       [name]: error
+    });
+  };
+
+  const handlePhoneChange = (value) => {
+    setFormData({
+      ...formData,
+      phone_number: value || ''
+    });
+    
+    // Real-time validation for phone
+    const error = validateField('phone_number', value || '');
+    setFieldErrors({
+      ...fieldErrors,
+      phone_number: error
     });
   };
 
@@ -135,7 +148,15 @@ const Register = () => {
     setIsLoading(true);
 
     try {
-      const res=await authService.register(formData);
+      // Remove the '+' prefix from phone number before sending to backend
+      const dataToSend = {
+        ...formData,
+        phone_number: formData.phone_number.startsWith('+') 
+          ? formData.phone_number.slice(1) 
+          : formData.phone_number
+      };
+      
+      const res=await authService.register(dataToSend);
       localStorage.setItem('access_token',res.tokens.access)
       setUserEmail(formData.email);
       // setStep(2); // Move to activation step
@@ -500,18 +521,16 @@ const Register = () => {
                     Phone Number
                   </Label>
                   <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                    <Input
-                      id="phone_number"
-                      name="phone_number"
-                      placeholder="1234567890"
+                    <PhoneInput
+                      international
+                      countryCallingCodeEditable={false}
+                      defaultCountry="US"
                       value={formData.phone_number}
-                      onChange={handleChange}
-                      className={`pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${
-                        fieldErrors.phone_number ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
-                      }`}
-                      maxLength={10}
-                      required
+                      onChange={handlePhoneChange}
+                      className={`react-phone-number-input ${fieldErrors.phone_number ? 'border-red-500' : ''}`}
+                      numberInputProps={{
+                        className: `w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-11 ${fieldErrors.phone_number ? 'border-red-500' : 'border-gray-300'}`
+                      }}
                     />
                   </div>
                   {fieldErrors.phone_number && (
@@ -546,14 +565,14 @@ const Register = () => {
                 {/* Organization Email Domain */}
                 <div className="space-y-2">
                   <Label htmlFor="organization_email_domain" className="text-sm font-medium text-gray-700">
-                    Organization Email Domain
+                    Organization Email
                   </Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <Input
                       id="organization_email_domain"
                       name="organization_email_domain"
-                      placeholder="examplelogistics.com"
+                      placeholder="soltech@lomtechnology.com"
                       value={formData.organization_email_domain}
                       onChange={handleChange}
                       className={`pl-12 h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${

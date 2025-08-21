@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { 
   User, 
   Mail, 
@@ -19,8 +21,14 @@ import {
   Loader2,
   Award,
   Gauge,
-  Receipt
+  Receipt,
+  Download,
+  FileText,
+  FileSpreadsheet,
+  ChevronDown
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {organizationService} from '../services/organization'
 
 interface DriverDataModalProps {
@@ -106,6 +114,315 @@ const ViewDriver: React.FC<DriverDataModalProps> = ({
     }
   };
 
+  const exportToPDF = (data) => {
+    const { driver_info, statistics, trips, expenses, assigned_trucks, expenses_by_category, popular_routes } = data;
+    const doc = new jsPDF();
+    
+    // Title
+    doc.setFontSize(20);
+    doc.setTextColor(40, 40, 40);
+    doc.text(`Driver Profile: ${driver_info.first_name || 'N/A'} ${driver_info.last_name || 'N/A'}`, 20, 20);
+    
+    // Personal Information
+    doc.setFontSize(16);
+    doc.setTextColor(60, 60, 60);
+    doc.text('Personal Information', 20, 40);
+    
+    const personalData = [
+      ['Field', 'Value'],
+      ['Full Name', `${driver_info.first_name || 'N/A'} ${driver_info.last_name || 'N/A'}`],
+      ['Email', driver_info.email || 'N/A'],
+      ['Phone Number', driver_info.phone_number || 'N/A'],
+      ['Driver ID', driver_info.driver_id?.toString() || 'N/A'],
+      ['Organization', driver_info.organization || 'N/A'],
+      ['Account Status', driver_info.is_active ? 'Active' : 'Inactive'],
+      ['Driver Status', driver_info.driver_is_active ? 'Active' : 'Inactive'],
+      ['Date Joined', driver_info.date_joined ? formatDate(driver_info.date_joined) : 'N/A'],
+      ['Last Login', driver_info.last_login ? formatDate(driver_info.last_login) : 'Never'],
+      ['Gender', driver_info.gender || 'Not Specified'],
+      ['Avatar', driver_info.avatar || 'Not Set'],
+      ['Bio', driver_info.bio || 'Not Provided']
+    ];
+    
+    autoTable(doc, {
+      startY: 50,
+      head: [personalData[0]],
+      body: personalData.slice(1),
+      theme: 'grid',
+      headStyles: { fillColor: [66, 139, 202] },
+      styles: { fontSize: 10 }
+    });
+
+    // Professional Information
+    let yPos = doc.lastAutoTable.finalY + 20;
+    doc.setFontSize(16);
+    doc.setTextColor(60, 60, 60);
+    doc.text('Professional Information', 20, yPos);
+    
+    const professionalData = [
+      ['Field', 'Value'],
+      ['License Number', driver_info.license_number || 'N/A'],
+      ['License Expiry', driver_info.license_expiry ? formatDate(driver_info.license_expiry) : 'N/A'],
+      ['Years of Experience', driver_info.years_of_experience?.toString() || 'N/A'],
+      ['Vehicle Type', driver_info.vehicle_type || 'N/A'],
+      ['Assigned Truck Models', driver_info.assigned_truck_models?.length ? driver_info.assigned_truck_models.join(', ') : 'None']
+    ];
+    
+    autoTable(doc, {
+      startY: yPos + 5,
+      head: [professionalData[0]],
+      body: professionalData.slice(1),
+      theme: 'grid',
+      headStyles: { fillColor: [66, 139, 202] },
+      styles: { fontSize: 10 }
+    });
+    
+    // Performance Statistics
+    yPos = doc.lastAutoTable.finalY + 20;
+    doc.setFontSize(16);
+    doc.setTextColor(60, 60, 60);
+    doc.text('Performance Statistics', 20, yPos);
+    
+    const statsData = [
+      ['Metric', 'Value'],
+      ['Total Trips', statistics?.total_trips?.toString() || '0'],
+      ['Completed Trips', statistics?.completed_trips?.toString() || '0'],
+      ['Active Trips', statistics?.active_trips?.toString() || '0'],
+      ['Cancelled Trips', statistics?.cancelled_trips?.toString() || '0'],
+      ['Completion Rate', `${statistics?.completion_rate?.toFixed(1) || '0'}%`],
+      ['Total Distance', statistics?.total_distance?.toLocaleString() || '0'],
+      ['Total Expenses', statistics?.total_expenses ? formatCurrency(statistics.total_expenses) : '$0.00'],
+      ['Assigned Trucks Count', statistics?.assigned_trucks_count?.toString() || '0'],
+      ['Avg Trip Duration (Hours)', statistics?.avg_trip_duration_hours?.toString() || '0'],
+      ['Recent Trips (30 Days)', statistics?.recent_trips_30_days?.toString() || '0']
+    ];
+    
+    autoTable(doc, {
+      startY: yPos + 5,
+      head: [statsData[0]],
+      body: statsData.slice(1),
+      theme: 'grid',
+      headStyles: { fillColor: [66, 139, 202] },
+      styles: { fontSize: 10 }
+    });
+    
+    // Expenses
+    if (expenses && expenses.length > 0) {
+      yPos = doc.lastAutoTable.finalY + 20;
+      doc.setFontSize(16);
+      doc.setTextColor(60, 60, 60);
+      doc.text('Expense Records', 20, yPos);
+      
+      const expenseData = expenses.map(expense => [
+        expense.date ? formatDate(expense.date) : 'N/A',
+        expense.category || 'N/A',
+        expense.amount ? formatCurrency(expense.amount) : '$0.00',
+        expense.description ? (expense.description.length > 25 ? expense.description.substring(0, 25) + '...' : expense.description) : 'N/A',
+        expense.trip_source && expense.trip_destination ? `${expense.trip_source} → ${expense.trip_destination}` : 'N/A'
+      ]);
+      
+      autoTable(doc, {
+        startY: yPos + 5,
+        head: [['Date', 'Category', 'Amount', 'Description', 'Route']],
+        body: expenseData,
+        theme: 'grid',
+        headStyles: { fillColor: [66, 139, 202] },
+        styles: { fontSize: 9 }
+      });
+    } else {
+      yPos = doc.lastAutoTable.finalY + 20;
+      doc.setFontSize(12);
+      doc.setTextColor(100, 100, 100);
+      doc.text('No expense records found.', 20, yPos);
+    }
+    
+    // Add new page if needed for additional data
+    if (trips && trips.length > 0) {
+      doc.addPage();
+      doc.setFontSize(16);
+      doc.setTextColor(60, 60, 60);
+      doc.text('Trip Records', 20, 20);
+      
+      const tripData = trips.map(trip => [
+        trip.trip_id?.toString() || 'N/A',
+        trip.source && trip.destination ? `${trip.source} → ${trip.destination}` : 'N/A',
+        trip.status || 'N/A',
+        trip.total_distance?.toLocaleString() || 'N/A',
+        trip.truck_license_plate || 'N/A',
+        trip.trip_start ? formatDate(trip.trip_start) : 'N/A'
+      ]);
+      
+      autoTable(doc, {
+        startY: 30,
+        head: [['Trip ID', 'Route', 'Status', 'Distance (km)', 'Truck', 'Start Date']],
+        body: tripData,
+        theme: 'grid',
+        headStyles: { fillColor: [66, 139, 202] },
+        styles: { fontSize: 9 }
+      });
+    }
+    
+    // Save the PDF
+    doc.save(`driver_profile_${driver_info.first_name || 'unknown'}_${driver_info.last_name || 'driver'}.pdf`);
+  };
+
+  const exportToCSV = (data) => {
+    const { driver_info, statistics, trips, expenses, assigned_trucks, expenses_by_category, popular_routes } = data;
+    
+    // Create CSV content as an array of rows
+    const csvRows = [];
+    
+    // Driver Profile Information - Header row and single data row
+    csvRows.push(['DRIVER PROFILE INFORMATION']);
+    csvRows.push([
+      'Full Name', 'Email', 'Phone Number', 'Driver ID', 'Organization', 'Account Status', 
+      'Driver Status', 'Date Joined', 'Last Login', 'Gender', 'License Number', 'License Expiry', 
+      'Years of Experience', 'Vehicle Type', 'Assigned Truck Models', 'Avatar', 'Bio'
+    ]);
+    csvRows.push([
+      `${(driver_info.first_name || 'N/A')} ${(driver_info.last_name || 'N/A')}`,
+      driver_info.email || 'N/A',
+      driver_info.phone_number || 'N/A',
+      driver_info.driver_id || 'N/A',
+      driver_info.organization || 'N/A',
+      driver_info.is_active ? 'Active' : 'Inactive',
+      driver_info.driver_is_active ? 'Active' : 'Inactive',
+      driver_info.date_joined ? formatDate(driver_info.date_joined) : 'N/A',
+      driver_info.last_login ? formatDate(driver_info.last_login) : 'Never',
+      driver_info.gender || 'N/A',
+      driver_info.license_number || 'N/A',
+      driver_info.license_expiry ? formatDate(driver_info.license_expiry) : 'N/A',
+      driver_info.years_of_experience || 'N/A',
+      driver_info.vehicle_type || 'N/A',
+      driver_info.assigned_truck_models?.length ? driver_info.assigned_truck_models.join('; ') : 'None',
+      driver_info.avatar || 'Not Set',
+      driver_info.bio || 'Not Provided'
+    ]);
+    csvRows.push([]); // Empty row
+    
+    // Performance Statistics - Header row and single data row
+    csvRows.push(['PERFORMANCE STATISTICS']);
+    csvRows.push([
+      'Total Trips', 'Completed Trips', 'Active Trips', 'Cancelled Trips', 'Completion Rate',
+      'Total Distance', 'Total Expenses', 'Assigned Trucks Count', 'Average Trip Duration (Hours)', 'Recent Trips (30 Days)'
+    ]);
+    csvRows.push([
+      statistics?.total_trips || '0',
+      statistics?.completed_trips || '0',
+      statistics?.active_trips || '0',
+      statistics?.cancelled_trips || '0',
+      `${statistics?.completion_rate?.toFixed(1) || '0'}%`,
+      statistics?.total_distance || '0',
+      statistics?.total_expenses || '0',
+      statistics?.assigned_trucks_count || '0',
+      statistics?.avg_trip_duration_hours || '0',
+      statistics?.recent_trips_30_days || '0'
+    ]);
+    csvRows.push([]); // Empty row
+    
+    // Assigned Trucks
+    if (assigned_trucks && assigned_trucks.length > 0) {
+      csvRows.push(['ASSIGNED TRUCKS']);
+      csvRows.push(['Truck ID', 'License Plate', 'Model', 'Fuel Volume', 'Load Weight', 'Maintenance Type', 'Trips Count']);
+      assigned_trucks.forEach(truck => {
+        csvRows.push([
+          truck.truck_id || 'N/A',
+          truck.license_plate || 'N/A',
+          truck.truck_model || 'N/A',
+          truck.fuel_volume || 'N/A',
+          truck.load_weight || 'N/A',
+          truck.maintenance_type || 'N/A',
+          truck.trips_count || '0'
+        ]);
+      });
+      csvRows.push([]); // Empty row
+    }
+    
+    // Expenses by Category
+    if (expenses_by_category && expenses_by_category.length > 0) {
+      csvRows.push(['EXPENSES BY CATEGORY']);
+      csvRows.push(['Category', 'Total Amount', 'Number of Expenses']);
+      expenses_by_category.forEach(category => {
+        csvRows.push([
+          category.category || 'N/A',
+          category.total_amount || '0',
+          category.expense_count || '0'
+        ]);
+      });
+      csvRows.push([]); // Empty row
+    }
+    
+    // Popular Routes
+    if (popular_routes && popular_routes.length > 0) {
+      csvRows.push(['POPULAR ROUTES']);
+      csvRows.push(['Source', 'Destination', 'Trip Count', 'Total Distance']);
+      popular_routes.forEach(route => {
+        csvRows.push([
+          route.source || 'N/A',
+          route.destination || 'N/A',
+          route.trip_count || '0',
+          route.total_distance || '0'
+        ]);
+      });
+      csvRows.push([]); // Empty row
+    }
+    
+    // Trip Records
+    if (trips && trips.length > 0) {
+      csvRows.push(['TRIP RECORDS']);
+      csvRows.push(['Trip ID', 'Source', 'Destination', 'Status', 'Distance', 'Truck License Plate', 'Truck Model', 'Trip Start', 'Trip End']);
+      trips.forEach(trip => {
+        csvRows.push([
+          trip.trip_id || 'N/A',
+          trip.source || 'N/A',
+          trip.destination || 'N/A',
+          trip.status || 'N/A',
+          trip.total_distance || 'N/A',
+          trip.truck_license_plate || 'N/A',
+          trip.truck_model || 'N/A',
+          trip.trip_start ? formatDate(trip.trip_start) : 'N/A',
+          trip.trip_end ? formatDate(trip.trip_end) : 'N/A'
+        ]);
+      });
+      csvRows.push([]); // Empty row
+    }
+    
+    // Expense Records
+    if (expenses && expenses.length > 0) {
+      csvRows.push(['EXPENSE RECORDS']);
+      csvRows.push(['Expense ID', 'Date', 'Category', 'Amount', 'Description', 'Trip Source', 'Trip Destination']);
+      expenses.forEach(expense => {
+        csvRows.push([
+          expense.expense_id || 'N/A',
+          expense.date ? formatDate(expense.date) : 'N/A',
+          expense.category || 'N/A',
+          expense.amount || '0',
+          expense.description || 'N/A',
+          expense.trip_source || 'N/A',
+          expense.trip_destination || 'N/A'
+        ]);
+      });
+    }
+    
+    // Convert array to CSV string
+    const csvContent = csvRows.map(row => 
+      row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+    
+    // Create and download file using Blob
+    const BOM = '\uFEFF'; // UTF-8 BOM
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `driver_profile_${driver_info.first_name || 'unknown'}_${driver_info.last_name || 'driver'}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -152,13 +469,36 @@ const ViewDriver: React.FC<DriverDataModalProps> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center">
-            <User className="h-6 w-6 mr-2" />
-            Driver Profile: {driver_info.first_name} {driver_info.last_name}
-          </DialogTitle>
-          <DialogDescription>
-            Complete driver information and performance data
-          </DialogDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle className="flex items-center">
+                <User className="h-6 w-6 mr-2" />
+                Driver Profile: {driver_info.first_name} {driver_info.last_name}
+              </DialogTitle>
+              <DialogDescription>
+                Complete driver information and performance data
+              </DialogDescription>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="flex items-center gap-2">
+                  <Download className="h-4 w-4" />
+                  Export
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => exportToPDF(driverData)} className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Export as PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportToCSV(driverData)} className="flex items-center gap-2">
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Export as CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -211,6 +551,12 @@ const ViewDriver: React.FC<DriverDataModalProps> = ({
                 <p className="text-sm font-medium text-gray-500">Last Login</p>
                 <p>{driver_info.last_login ? formatDate(driver_info.last_login) : 'Never'}</p>
               </div>
+              {driver_info.gender && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Gender</p>
+                  <p className="capitalize">{driver_info.gender}</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 

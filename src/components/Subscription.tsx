@@ -5,8 +5,11 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, CheckCircle, CreditCard, Calendar, Users, ArrowUpRight, Filter, Clock } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertCircle, CheckCircle, CreditCard, Calendar, Users, ArrowUpRight, Filter, Clock, Download, FileText, FileSpreadsheet, ChevronDown } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 import { Subscription as SubscriptionType, SubscriptionStatus, PaymentHistory, SubscriptionLimits } from '../services/subscription';
 import { toast } from '@/hooks/use-toast';
@@ -169,6 +172,135 @@ const Subscription = () => {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
+    });
+  };
+
+  const exportPaymentHistoryToPDF = () => {
+    const doc = new jsPDF();
+    
+    // Title
+    doc.setFontSize(20);
+    doc.setTextColor(40, 40, 40);
+    doc.text('Payment History Report', 20, 20);
+    
+    // Date
+    doc.setFontSize(12);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 30);
+    
+    // Summary stats
+    doc.setFontSize(14);
+    doc.setTextColor(60, 60, 60);
+    doc.text('Summary', 20, 45);
+    
+    const totalPayments = paymentHistory.filter(t => t.type === 'payment').length;
+    const totalRefunds = paymentHistory.filter(t => t.type === 'refund').length;
+    const totalPaid = paymentHistory
+      .filter(t => t.type === 'payment')
+      .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+    
+    doc.setFontSize(11);
+    doc.setTextColor(80, 80, 80);
+    doc.text(`Total Transactions: ${paymentHistory.length}`, 20, 55);
+    doc.text(`Total Payments: ${totalPayments}`, 20, 65);
+    doc.text(`Total Refunds: ${totalRefunds}`, 20, 75);
+    doc.text(`Total Amount Paid: $${totalPaid.toFixed(2)}`, 20, 85);
+    
+    // Payment history table
+    const tableData = paymentHistory.map(transaction => [
+      formatDate(transaction.transaction_date),
+      transaction.subscription_name || 'N/A',
+      `${formatDate(transaction.start_date)} - ${formatDate(transaction.end_date)}`,
+      `${transaction.type === 'refund' ? '-' : ''}$${parseFloat(transaction.amount).toFixed(2)} ${transaction.currency}`,
+      `$${parseFloat((transaction as any).subtotal_amount || '0').toFixed(2)}`,
+      `$${parseFloat((transaction as any).tax_amount || '0').toFixed(2)} (${(parseFloat((transaction as any).tax_rate || '0') * 100).toFixed(1)}%)`,
+      `$${parseFloat((transaction as any).effective_payment_amount || '0').toFixed(2)}`,
+      `$${parseFloat((transaction as any).credit_used_amount || '0').toFixed(2)}`,
+      `$${parseFloat((transaction as any).credit_remaining_amount || '0').toFixed(2)}`,
+      transaction.status.toUpperCase()
+    ]);
+    
+    autoTable(doc, {
+      startY: 95,
+      head: [['Date', 'Plan', 'Period', 'Amount', 'Subtotal', 'Tax', 'Effective', 'Credit Used', 'Credit Remaining', 'Status']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [66, 139, 202] },
+      styles: { fontSize: 7 },
+      columnStyles: {
+        0: { cellWidth: 20 }, // Date
+        1: { cellWidth: 25 }, // Plan
+        2: { cellWidth: 30 }, // Period
+        3: { cellWidth: 18 }, // Amount
+        4: { cellWidth: 15 }, // Subtotal
+        5: { cellWidth: 20 }, // Tax
+        6: { cellWidth: 15 }, // Effective
+        7: { cellWidth: 15 }, // Credit Used
+        8: { cellWidth: 15 }, // Credit Remaining
+        9: { cellWidth: 15 }  // Status
+      }
+    });
+    
+    // Save the PDF
+    const filename = `payment_history_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(filename);
+    
+    toast({
+      title: "Success",
+      description: `PDF exported successfully with ${paymentHistory.length} transactions.`,
+    });
+  };
+
+  const exportPaymentHistoryToCSV = () => {
+    let csvContent = "data:text/csv;charset=utf-8,";
+    
+    // Add metadata
+    csvContent += "Payment History Report\n";
+    csvContent += `Generated on,${new Date().toLocaleDateString()}\n`;
+    csvContent += `Total Transactions,${paymentHistory.length}\n`;
+    csvContent += `Total Payments,${paymentHistory.filter(t => t.type === 'payment').length}\n`;
+    csvContent += `Total Refunds,${paymentHistory.filter(t => t.type === 'refund').length}\n`;
+    csvContent += `Total Amount Paid,${paymentHistory.filter(t => t.type === 'payment').reduce((sum, t) => sum + parseFloat(t.amount), 0).toFixed(2)}\n`;
+    csvContent += "\n";
+    
+    // Headers
+    csvContent += "Transaction ID,Type,Transaction Date,Created Date,Plan Name,Duration Months,Start Date,End Date,Amount,Currency,Subtotal Amount,Tax Amount,Tax Rate,Effective Payment Amount,Credit Used Amount,Credit Remaining Amount,Status\n";
+    
+    // Data rows
+    paymentHistory.forEach(transaction => {
+      const row = [
+        `"${transaction.id}"`,
+        `"${transaction.type.toUpperCase()}"`,
+        `"${formatDate(transaction.transaction_date)}"`,
+        `"${formatDate(transaction.created_at)}"`,
+        `"${transaction.subscription_name || 'N/A'}"`,
+        `"${transaction.duration_months}"`,
+        `"${formatDate(transaction.start_date)}"`,
+        `"${formatDate(transaction.end_date)}"`,
+        `"${parseFloat(transaction.amount).toFixed(2)}"`,
+        `"${transaction.currency}"`,
+        `"${parseFloat((transaction as any).subtotal_amount || '0').toFixed(2)}"`,
+        `"${parseFloat((transaction as any).tax_amount || '0').toFixed(2)}"`,
+        `"${(parseFloat((transaction as any).tax_rate || '0') * 100).toFixed(2)}%"`,
+        `"${parseFloat((transaction as any).effective_payment_amount || '0').toFixed(2)}"`,
+        `"${parseFloat((transaction as any).credit_used_amount || '0').toFixed(2)}"`,
+        `"${parseFloat((transaction as any).credit_remaining_amount || '0').toFixed(2)}"`,
+        `"${transaction.status.toUpperCase()}"`
+      ];
+      csvContent += row.join(',') + "\n";
+    });
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `payment_history_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({
+      title: "Success",
+      description: `CSV exported successfully with ${paymentHistory.length} transactions.`,
     });
   };
 
@@ -405,19 +537,89 @@ const Subscription = () => {
             {subscriptions
               .filter(subscription => monthFilter === 'all' || subscription.duration_months.toString() === monthFilter)
               .map((subscription) => {
-                const currentAmount = subscriptionStatus?.amount ? parseFloat(subscriptionStatus.amount) : 0;
+                const currentSubscriptionAmount = subscriptionStatus?.amount ? parseFloat(subscriptionStatus.amount) : 0;
                 const newAmount = parseFloat(subscription.amount);
-                const isUpgrade = subscriptionStatus?.has_subscription && newAmount > currentAmount;
-                const isDowngrade = subscriptionStatus?.has_subscription && newAmount < currentAmount;
-                const isCurrent = subscriptionStatus?.has_subscription && newAmount === currentAmount;
+                const isUpgrade = subscriptionStatus?.has_subscription && newAmount > currentSubscriptionAmount;
+                const isDowngrade = subscriptionStatus?.has_subscription && newAmount < currentSubscriptionAmount;
+                const isCurrent = subscriptionStatus?.has_subscription && newAmount === currentSubscriptionAmount;
+
+                // Determine pricing tier for styling
+                const filteredSubs = subscriptions.filter(sub => monthFilter === 'all' || sub.duration_months.toString() === monthFilter);
+                const sortedAmounts = [...new Set(filteredSubs.map(sub => parseFloat(sub.amount)))].sort((a, b) => a - b);
+                const planAmount = parseFloat(subscription.amount);
+                const isFree = planAmount === 0;
+                
+                // Determine tier position
+                const paidAmounts = sortedAmounts.filter(amount => amount > 0);
+                const totalTiers = paidAmounts.length;
+                const currentTierIndex = paidAmounts.indexOf(planAmount);
+                
+                const isBasic = !isFree && currentTierIndex === 0; // First paid tier
+                const isPremium = !isFree && totalTiers >= 3 && currentTierIndex === totalTiers - 2; // Second highest
+                const isUltimate = !isFree && totalTiers >= 4 && currentTierIndex === totalTiers - 1; // Highest tier (Gold)
+                const isStandard = !isFree && !isBasic && !isPremium && !isUltimate; // Middle tiers
+
+                // Dynamic card styling based on tier
+                let cardClasses = "relative transition-all duration-200 hover:shadow-lg";
+                let headerClasses = "";
+                let titleClasses = "";
+                let priceClasses = "text-3xl font-bold";
+                let popularBadge = null;
+
+                if (isFree) {
+                  // Free Plan - Gray theme
+                  cardClasses += " border-gray-200 bg-gray-50";
+                  headerClasses = "bg-gray-100 border-b border-gray-200";
+                  titleClasses = "text-gray-700";
+                  priceClasses += " text-gray-600";
+                } else if (isBasic) {
+                  // Basic Plan - Blue theme
+                  cardClasses += " border-blue-200 bg-blue-50";
+                  headerClasses = "bg-blue-100 border-b border-blue-200";
+                  titleClasses = "text-blue-800";
+                  priceClasses += " text-blue-700";
+                } else if (isStandard) {
+                  // Standard/Middle tiers - Green theme
+                  cardClasses += " border-green-200 bg-green-50";
+                  headerClasses = "bg-green-100 border-b border-green-200";
+                  titleClasses = "text-green-800";
+                  priceClasses += " text-green-700";
+                } else if (isPremium) {
+                  // Premium Plan - Purple theme with popularity badge
+                  cardClasses += " border-purple-300 bg-gradient-to-br from-purple-50 to-pink-50 ring-2 ring-purple-200 shadow-lg";
+                  headerClasses = "bg-gradient-to-r from-purple-100 to-pink-100 border-b border-purple-200";
+                  titleClasses = "text-purple-800";
+                  priceClasses += " text-purple-700";
+                  popularBadge = (
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <Badge className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-3 py-1 text-xs font-semibold shadow-md">
+                        ⭐ MOST POPULAR
+                      </Badge>
+                    </div>
+                  );
+                } else if (isUltimate) {
+                  // Ultimate Plan - Gold theme with premium badge
+                  cardClasses += " border-yellow-400 bg-gradient-to-br from-yellow-50 via-amber-50 to-orange-50 ring-2 ring-yellow-300 shadow-xl";
+                  headerClasses = "bg-gradient-to-r from-yellow-100 via-amber-100 to-orange-100 border-b border-yellow-300";
+                  titleClasses = "text-yellow-900";
+                  priceClasses += " text-yellow-800";
+                  popularBadge = (
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <Badge className="bg-gradient-to-r from-yellow-600 via-amber-600 to-orange-600 text-white px-3 py-1 text-xs font-semibold shadow-lg">
+                        👑 ULTIMATE
+                      </Badge>
+                    </div>
+                  );
+                }
 
                 return (
-                  <Card key={subscription.id} className="relative">
-                    <CardHeader>
+                  <Card key={subscription.id} className={cardClasses}>
+                    {popularBadge}
+                    <CardHeader className={headerClasses}>
                       <div className="flex justify-between items-start mb-2">
                         <div>
-                          <CardTitle>{subscription.name}</CardTitle>
-                          <CardDescription>{subscription.description}</CardDescription>
+                          <CardTitle className={titleClasses}>{subscription.name}</CardTitle>
+                          <CardDescription className="text-gray-600">{subscription.description}</CardDescription>
                         </div>
                         <div className="flex flex-col gap-1">
                           {isCurrent && (
@@ -429,9 +631,14 @@ const Subscription = () => {
                           {isDowngrade && (
                             <Badge variant="outline" className="text-orange-600 border-orange-600">Downgrade</Badge>
                           )}
+                          {isFree && (
+                            <Badge variant="outline" className="text-gray-600 border-gray-400 bg-white">
+                              FREE
+                            </Badge>
+                          )}
                         </div>
                       </div>
-                      <div className="text-3xl font-bold">
+                      <div className={priceClasses}>
                         ${subscription.amount}
                         <span className="text-base font-normal text-gray-500">/{subscription.duration_months}mo</span>
                       </div>
@@ -476,7 +683,14 @@ const Subscription = () => {
                               </div>
                             )}
                             <Button
-                              className="w-full"
+                              className={`w-full transition-all duration-200 ${
+                                isFree ? 'bg-gray-600 hover:bg-gray-700' :
+                                isBasic ? 'bg-blue-600 hover:bg-blue-700' :
+                                isStandard ? 'bg-green-600 hover:bg-green-700' :
+                                isPremium ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-md' :
+                                isUltimate ? 'bg-gradient-to-r from-yellow-600 via-amber-600 to-orange-600 hover:from-yellow-700 hover:via-amber-700 hover:to-orange-700 shadow-lg text-white' :
+                                'bg-gray-600 hover:bg-gray-700'
+                              }`}
                               onClick={() => handleSubscribe(subscription.id)}
                               disabled={isCurrent || isBlocked}
                               variant={isDowngrade ? "outline" : "default"}
@@ -500,49 +714,178 @@ const Subscription = () => {
         <TabsContent value="history">
           <Card>
             <CardHeader>
-              <CardTitle>Transaction History</CardTitle>
-              <CardDescription>Your subscription payments and refunds</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Payment History</CardTitle>
+                  <CardDescription>Complete transaction history with detailed breakdown</CardDescription>
+                </div>
+                {paymentHistory.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="flex items-center gap-2">
+                        <Download className="h-4 w-4" />
+                        Export
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={exportPaymentHistoryToPDF} className="flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Export as PDF
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={exportPaymentHistoryToCSV} className="flex items-center gap-2">
+                        <FileSpreadsheet className="h-4 w-4" />
+                        Export as CSV
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {paymentHistory.length > 0 ? (
-                <div className="space-y-4">
-                  {paymentHistory.map((transaction) => (
-                    <div key={`${transaction.type}-${transaction.id}`} className="flex justify-between items-center p-4 border rounded-lg">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium">{transaction.subscription_name}</p>
-                          <Badge variant={transaction.type === 'refund' ? 'destructive' : 'secondary'} className="text-xs">
-                            {transaction.type === 'refund' ? 'REFUND' : 'PAYMENT'}
-                          </Badge>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-2 font-medium text-sm">Transaction Date
+                          
+                        </th>
+                        <th className="text-left py-3 px-2 font-medium text-sm">Plan</th>
+                        <th className="text-left py-3 px-2 font-medium text-sm">Period</th>
+                        <th className="text-left py-3 px-2 font-medium text-sm">Amount</th>
+                        <th className="text-left py-3 px-2 font-medium text-sm">Subtotal</th>
+                        <th className="text-left py-3 px-2 font-medium text-sm">Tax</th>
+                        <th className="text-left py-3 px-2 font-medium text-sm">Effective Amount</th>
+                        <th className="text-left py-3 px-2 font-medium text-sm">Credit Used</th>
+                        <th className="text-left py-3 px-2 font-medium text-sm">Credit Remaining</th>
+                        <th className="text-left py-3 px-2 font-medium text-sm">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paymentHistory.map((transaction) => (
+                        <tr key={`${transaction.type}-${transaction.id}`} className="border-b hover:bg-gray-50">
+                          <td className="py-3 px-2 min-w-0">
+                            <div className="min-w-0">
+                              <div className="text-xs text-gray-500">
+                                 {formatDate(transaction.transaction_date)}
+                              </div>
+                              
+                            </div>
+                          </td>
+                          <td className="py-3 px-2 min-w-0">
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium truncate">
+                                {transaction.subscription_name}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {transaction.duration_months} month{transaction.duration_months > 1 ? 's' : ''}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-2 min-w-0">
+                            <div className="min-w-0">
+                              <div className="text-xs text-gray-500">
+                                <div>Start: {formatDate(transaction.start_date)}</div>
+                                <div>End: {formatDate(transaction.end_date)}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-2 text-right">
+                            <div className={`text-sm font-medium ${transaction.type === 'refund' ? 'text-red-600' : 'text-green-600'}`}>
+                              {transaction.type === 'refund' ? '-' : ''}${parseFloat(transaction.amount).toFixed(2)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {transaction.currency}
+                            </div>
+                          </td>
+                          <td className="py-3 px-2 text-right">
+                            <div className="text-sm">
+                              ${parseFloat((transaction as any).subtotal_amount || '0').toFixed(2)}
+                            </div>
+                          </td>
+                          <td className="py-3 px-2 text-right">
+                            <div className="text-sm">
+                              ${parseFloat((transaction as any).tax_amount || '0').toFixed(2)}
+                            </div>
+                            {(transaction as any).tax_rate && (
+                              <div className="text-xs text-gray-500">
+                                {(parseFloat((transaction as any).tax_rate || '0') * 100).toFixed(1)}%
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 px-2 text-right">
+                            <div className="text-sm">
+                              ${parseFloat((transaction as any).effective_payment_amount || '0').toFixed(2)}
+                            </div>
+                          </td>
+                          <td className="py-3 px-2 text-right">
+                            <div className="text-sm">
+                              ${parseFloat((transaction as any).credit_used_amount || '0').toFixed(2)}
+                            </div>
+                          </td>
+                          <td className="py-3 px-2 text-right">
+                            <div className="text-sm">
+                              ${parseFloat((transaction as any).credit_remaining_amount || '0').toFixed(2)}
+                            </div>
+                          </td>
+                          <td className="py-3 px-2">
+                            <div className="space-y-1">
+                              <Badge variant={transaction.status === 'completed' ? 'default' : 'secondary'} className="text-xs">
+                                {transaction.status.toUpperCase()}
+                              </Badge>
+                              {transaction.type === 'refund' && transaction.refund_method && (
+                                <div className="text-xs text-gray-500">
+                                  via {transaction.refund_method === 'stripe' ? 'Card' : 'Wallet'}
+                                </div>
+                              )}
+                              {transaction.type === 'refund' && transaction.refund_type && (
+                                <div className="text-xs text-gray-500 capitalize">
+                                  {transaction.refund_type} refund
+                                </div>
+                              )}
+                              {transaction.type === 'refund' && transaction.reason && (
+                                <div className="text-xs text-gray-400 mt-1">
+                                  {transaction.reason}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  
+                  {/* Summary Section */}
+                  <div className="mt-6 pt-4 border-t bg-gray-50 rounded-lg p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div className="text-center">
+                        <div className="font-medium text-gray-900">
+                          {paymentHistory.filter(t => t.type === 'payment').length}
                         </div>
-                        <p className="text-sm text-gray-500">
-                          {formatDate(transaction.transaction_date)} - {transaction.duration_months} months
-                        </p>
-                        {transaction.type === 'refund' && transaction.reason && (
-                          <p className="text-xs text-gray-400 mt-1">
-                            {transaction.reason}
-                          </p>
-                        )}
+                        <div className="text-gray-500">Total Payments</div>
                       </div>
-                      <div className="text-right">
-                        <p className={`font-medium ${transaction.type === 'refund' ? 'text-red-600' : 'text-green-600'}`}>
-                          {transaction.type === 'refund' ? '-' : '+'}${Math.abs(parseFloat(transaction.amount)).toFixed(2)}
-                        </p>
-                        <Badge variant={transaction.status === 'completed' ? 'default' : 'secondary'}>
-                          {transaction.status}
-                        </Badge>
-                        {transaction.type === 'refund' && transaction.refund_method && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            via {transaction.refund_method === 'stripe' ? 'Original Payment Method' : 'Wallet Credit'}
-                          </p>
-                        )}
+                      <div className="text-center">
+                        <div className="font-medium text-gray-900">
+                          {paymentHistory.filter(t => t.type === 'refund').length}
+                        </div>
+                        <div className="text-gray-500">Total Refunds</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-medium text-green-600">
+                          ${paymentHistory
+                            .filter(t => t.type === 'payment')
+                            .reduce((sum, t) => sum + parseFloat(t.amount), 0)
+                            .toFixed(2)}
+                        </div>
+                        <div className="text-gray-500">Total Paid</div>
                       </div>
                     </div>
-                  ))}
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <p className="text-gray-500">No transaction history found</p>
+                  <p className="text-gray-500">No payment history found</p>
                 </div>
               )}
             </CardContent>

@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { 
   Users, 
   Plus, 
@@ -18,13 +19,18 @@ import {
   MoreVertical,
   ChevronDown,
   CreditCard,
-  AlertCircle
+  AlertCircle,
+  Download,
+  FileText,
+  FileSpreadsheet
 } from 'lucide-react';
 import { driverService, DriverProfile } from '../services/driver';
 import { subscriptionService } from '../services/subscription';
 import { toast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import CreateDriverModal from './CreateDriverModal';
 import EditDriverModal from './EditDriverModal';
 import ViewDriverModal from './ViewDriverModal';
@@ -132,14 +138,20 @@ const DashboardContent = ({onTabChange,activeTab}) => {
     const searchLower = searchTerm.toLowerCase().trim();
     return drivers.filter(driver => {
       const fullName = `${driver.user.first_name} ${driver.user.last_name}`.toLowerCase();
-      const email = driver.user.masked_email.toLowerCase();
-      const license = driver.license_number.toLowerCase();
-      const vehicleType = driver.vehicle_type.toLowerCase();
+      const email = driver.user.masked_email?.toLowerCase() || '';
+      const license = driver.license_number?.toLowerCase() || '';
+      const vehicleType = driver.vehicle_type?.toLowerCase() || '';
+      const gender = driver.user.gender?.toLowerCase() || '';
+      const truckPlate = driver.truck_license_plate?.toLowerCase() || '';
+      const truckModel = driver.truck_model?.toLowerCase() || '';
       
       return fullName.includes(searchLower) ||
              email.includes(searchLower) ||
              license.includes(searchLower) ||
-             vehicleType.includes(searchLower);
+             vehicleType.includes(searchLower) ||
+             gender.includes(searchLower) ||
+             truckPlate.includes(searchLower) ||
+             truckModel.includes(searchLower);
     });
   }, [drivers, searchTerm]);
 
@@ -302,6 +314,151 @@ const DashboardContent = ({onTabChange,activeTab}) => {
     setSearchTerm('');
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    
+    // Title
+    doc.setFontSize(20);
+    doc.setTextColor(40, 40, 40);
+    doc.text('Driver Profiles Report', 20, 20);
+    
+    // Date
+    doc.setFontSize(12);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 30);
+    
+    // Summary stats
+    doc.setFontSize(14);
+    doc.setTextColor(60, 60, 60);
+    doc.text('Summary', 20, 45);
+    
+    doc.setFontSize(11);
+    doc.setTextColor(80, 80, 80);
+    doc.text(`Total Drivers: ${filteredDrivers.length}`, 20, 55);
+    doc.text(`Active Drivers: ${filteredDrivers.filter(d => d.is_active).length}`, 20, 65);
+    doc.text(`Average Experience: ${filteredDrivers.length > 0 ? Math.round(filteredDrivers.reduce((acc, d) => acc + d.years_of_experience, 0) / filteredDrivers.length) : 0} years`, 20, 75);
+    
+    if (searchTerm) {
+      doc.text(`Filtered by: "${searchTerm}"`, 20, 85);
+    }
+    
+    // Drivers table
+    const tableData = filteredDrivers.map(driver => [
+      `${driver.user.first_name || 'N/A'} ${driver.user.last_name || 'N/A'}`,
+      driver.user.masked_email || 'N/A',
+      driver.license_number || 'N/A',
+      driver.license_expiry ? formatDate(driver.license_expiry) : 'N/A',
+      driver.user.gender || 'Not specified',
+      driver.vehicle_type || 'N/A',
+      driver.truck_license_plate || 'Not assigned',
+      driver.truck_model || 'Not specified',
+      driver.years_of_experience?.toString() || '0',
+      driver.is_active ? 'Active' : 'Inactive'
+    ]);
+    
+    autoTable(doc, {
+      startY: searchTerm ? 95 : 85,
+      head: [['Name', 'Email', 'License #', 'License Exp', 'Gender', 'Vehicle Type', 'Truck Plate', 'Truck Model', 'Experience', 'Status']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [66, 139, 202] },
+      styles: { fontSize: 7 },
+      columnStyles: {
+        0: { cellWidth: 20 }, // Name
+        1: { cellWidth: 25 }, // Email
+        2: { cellWidth: 18 }, // License
+        3: { cellWidth: 16 }, // License Exp
+        4: { cellWidth: 12 }, // Gender
+        5: { cellWidth: 15 }, // Vehicle Type
+        6: { cellWidth: 16 }, // Truck Plate
+        7: { cellWidth: 18 }, // Truck Model
+        8: { cellWidth: 12 }, // Experience
+        9: { cellWidth: 12 }  // Status
+      }
+    });
+    
+    // Save the PDF
+    const filename = searchTerm 
+      ? `drivers_filtered_${searchTerm.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`
+      : `all_drivers_${new Date().toISOString().split('T')[0]}.pdf`;
+    
+    doc.save(filename);
+    
+    toast({
+      title: "Success",
+      description: `PDF exported successfully with ${filteredDrivers.length} drivers.`,
+    });
+  };
+
+  const exportToCSV = () => {
+    let csvContent = "data:text/csv;charset=utf-8,";
+    
+    // Add metadata
+    csvContent += "Driver Profiles Report\n";
+    csvContent += `Generated on,${new Date().toLocaleDateString()}\n`;
+    csvContent += `Total Drivers,${filteredDrivers.length}\n`;
+    csvContent += `Active Drivers,${filteredDrivers.filter(d => d.is_active).length}\n`;
+    
+    if (searchTerm) {
+      csvContent += `Filtered by,\"${searchTerm}\"\n`;
+    }
+    
+    csvContent += "\n";
+    
+    // Headers
+    csvContent += "Name,Email,Phone,Driver ID,License Number,License Expiry,Gender,Years of Experience,Vehicle Type,Truck License Plate,Truck Model,Organization,Account Status,Driver Status,Date Joined,Bio\n";
+    
+    // Data rows
+    filteredDrivers.forEach(driver => {
+      const row = [
+        `"${(driver.user.first_name || 'N/A')} ${(driver.user.last_name || 'N/A')}"`,
+        `"${driver.user.masked_email || 'N/A'}"`,
+        `"${driver.user.masked_phone_number || 'N/A'}"`,
+        `"${driver.user.id || 'N/A'}"`,
+        `"${driver.license_number || 'N/A'}"`,
+        `"${driver.license_expiry ? formatDate(driver.license_expiry) : 'N/A'}"`,
+        `"${driver.user.gender || 'Not specified'}"`,
+        `"${driver.years_of_experience || '0'}"`,
+        `"${driver.vehicle_type || 'N/A'}"`,
+        `"${driver.truck_license_plate || 'Not assigned'}"`,
+        `"${driver.truck_model || 'Not specified'}"`,
+        `"${driver.organization?.name || 'N/A'}"`,
+        `"${driver.user.is_active ? 'Active' : 'Inactive'}"`,
+        `"${driver.is_active ? 'Active' : 'Inactive'}"`,
+        `"${driver.user.created_at ? formatDate(driver.user.created_at) : 'N/A'}"`,
+        `"${driver.bio || 'Not Provided'}"`
+      ];
+      csvContent += row.join(',') + "\n";
+    });
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    
+    const filename = searchTerm 
+      ? `drivers_filtered_${searchTerm.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`
+      : `all_drivers_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({
+      title: "Success",
+      description: `CSV exported successfully with ${filteredDrivers.length} drivers.`,
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -395,13 +552,35 @@ const DashboardContent = ({onTabChange,activeTab}) => {
                 }
               </CardDescription>
             </div>
-            <Button 
-              onClick={() => setShowCreateModal(true)}
-              className="flex-shrink-0"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Driver
-            </Button>
+            <div className="flex gap-2 flex-shrink-0">
+              {filteredDrivers.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="flex items-center gap-2">
+                      <Download className="h-4 w-4" />
+                      Export
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={exportToPDF} className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Export as PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={exportToCSV} className="flex items-center gap-2">
+                      <FileSpreadsheet className="h-4 w-4" />
+                      Export as CSV
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              <Button 
+                onClick={() => setShowCreateModal(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Driver
+              </Button>
+            </div>
           </div>
           
           {/* Search Bar */}
@@ -409,7 +588,7 @@ const DashboardContent = ({onTabChange,activeTab}) => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
               type="text"
-              placeholder="Search drivers by name, email, license number, or vehicle type..."
+              placeholder="Search drivers by name, email, license, gender, vehicle type, truck details..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 pr-10 focus:outline-none focus:ring-0"
@@ -467,7 +646,10 @@ const DashboardContent = ({onTabChange,activeTab}) => {
                     <tr className="border-b">
                       <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm">Driver</th>
                       <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm hidden sm:table-cell">License</th>
-                      <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm hidden lg:table-cell">Experience</th>
+                      <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm hidden md:table-cell">Gender</th>
+                      <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm hidden lg:table-cell">Vehicle</th>
+                      <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm hidden lg:table-cell">Truck Details</th>
+                      <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm hidden xl:table-cell">Experience</th>
                       <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm">Status</th>
                       <th className="text-left py-3 px-2 sm:px-4 font-medium text-sm">Actions</th>
                     </tr>
@@ -479,7 +661,7 @@ const DashboardContent = ({onTabChange,activeTab}) => {
                         <td className="py-3 px-2 sm:px-4 min-w-0">
                           <div className="min-w-0">
                             <div className="font-medium text-sm truncate">
-                              {driver?.trucks?.[0].driver_email}
+                              {driver.user.first_name} {driver.user.last_name}
                             </div>
                             <div className="text-xs text-gray-500 truncate">
                               {driver.user.masked_email}
@@ -488,9 +670,13 @@ const DashboardContent = ({onTabChange,activeTab}) => {
                             <div className="text-xs text-gray-500 truncate sm:hidden">
                               {driver.license_number}
                             </div>
-                            {/* Show vehicle type on mobile and small tablets */}
+                            {/* Show additional info on mobile and small tablets */}
                             <div className="text-xs text-gray-500 truncate md:hidden">
                               {driver.vehicle_type} • {driver.years_of_experience}yr
+                            </div>
+                            {/* Show gender on mobile */}
+                            <div className="text-xs text-gray-500 truncate md:hidden">
+                              {driver.user.gender || 'Not specified'}
                             </div>
                           </div>
                         </td>
@@ -502,8 +688,25 @@ const DashboardContent = ({onTabChange,activeTab}) => {
                             </div>
                           </div>
                         </td>
-                     
-                        <td className="py-3 px-2 sm:px-4 whitespace-nowrap text-sm hidden lg:table-cell">
+                        <td className="py-3 px-2 sm:px-4 whitespace-nowrap text-sm hidden md:table-cell">
+                          <span className="capitalize">
+                            {driver.user.gender || 'Not specified'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-2 sm:px-4 min-w-0 hidden lg:table-cell">
+                          <div className="min-w-0">
+                            <div className="text-sm truncate font-medium">{driver.vehicle_type}</div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-2 sm:px-4 min-w-0 hidden lg:table-cell">
+                          <div className="min-w-0">
+                            <div className="text-sm truncate">{driver.truck_license_plate || 'Not assigned'}</div>
+                            <div className="text-xs text-gray-500 truncate">
+                              {driver.truck_model || 'Model not specified'}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-2 sm:px-4 whitespace-nowrap text-sm hidden xl:table-cell">
                           {driver.years_of_experience} years
                         </td>
                         <td className="py-3 px-2 sm:px-4">

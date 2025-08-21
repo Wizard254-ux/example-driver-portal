@@ -21,10 +21,12 @@ const EditDriverModal: React.FC<EditDriverModalProps> = ({ isOpen, onClose, driv
   const [formData, setFormData] = useState<UpdateDriverData>({
     years_of_experience: driver.years_of_experience,
     vehicle_type: driver.vehicle_type,
-    license_number: driver.license_number, // Added license_number
+    license_number: driver.license_number,
     license_expiry: driver.license_expiry,
+    truck_model: driver.truck_model || '',
+    truck_license_plate: driver.truck_license_plate || '',
     bio: driver.bio || '',
-    organization_id: orgId, // Ensure orgId is passed correctly
+    organization_id: orgId,
   });
   const [isLoading, setIsLoading] = useState(false);
   const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
@@ -32,6 +34,8 @@ const EditDriverModal: React.FC<EditDriverModalProps> = ({ isOpen, onClose, driv
   const vehicleTypes = [
     'Car', 'Van', 'Truck', '18-Wheeler', 'Motorcycle', 'Bus'
   ];
+
+
 
   const validateField = (field: string, value: any): string => {
     switch (field) {
@@ -60,7 +64,7 @@ const EditDriverModal: React.FC<EditDriverModalProps> = ({ isOpen, onClose, driv
     const errors: {[key: string]: string} = {};
     
     Object.keys(formData).forEach(key => {
-      if (key !== 'bio' && key !== 'organization_id') {
+      if (key !== 'bio' && key !== 'organization_id' && key !== 'truck_model' && key !== 'truck_license_plate') {
         const error = validateField(key, formData[key as keyof UpdateDriverData]);
         if (error) errors[key] = error;
       }
@@ -84,8 +88,8 @@ const EditDriverModal: React.FC<EditDriverModalProps> = ({ isOpen, onClose, driv
       }));
     }
 
-    // Validate field on change (except bio and organization_id)
-    if (field !== 'bio' && field !== 'organization_id') {
+    // Validate field on change (except optional fields)
+    if (field !== 'bio' && field !== 'organization_id' && field !== 'truck_model' && field !== 'truck_license_plate') {
       const error = validateField(field, value);
       if (error) {
         setFormErrors(prev => ({
@@ -220,7 +224,7 @@ const EditDriverModal: React.FC<EditDriverModalProps> = ({ isOpen, onClose, driv
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Driver Profile</DialogTitle>
           <DialogDescription>
@@ -319,6 +323,37 @@ const EditDriverModal: React.FC<EditDriverModalProps> = ({ isOpen, onClose, driv
             {formErrors.vehicle_type && (
               <div className="text-sm text-red-500 mt-1">{formErrors.vehicle_type}</div>
             )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="truck_model">Truck Model</Label>
+              <div className="relative">
+                <Truck className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  id="truck_model"
+                  type="text"
+                  value={formData.truck_model || ''}
+                  onChange={(e) => handleChange('truck_model', e.target.value)}
+                  className="pl-10"
+                  placeholder="Peterbilt 379"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="truck_license_plate">Truck License Plate</Label>
+              <div className="relative">
+                <Truck className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  id="truck_license_plate"
+                  type="text"
+                  value={formData.truck_license_plate || ''}
+                  onChange={(e) => handleChange('truck_license_plate', e.target.value)}
+                  className="pl-10"
+                  placeholder="ABC-1234"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">

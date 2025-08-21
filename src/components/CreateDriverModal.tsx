@@ -6,6 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Mail, User, Phone, CreditCard, Calendar, Truck, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import PhoneInput from 'react-phone-number-input';
+import { isValidPhoneNumber } from 'react-phone-number-input';
+import 'react-phone-number-input/style.css';
+import './phone-input.css';
 import { driverService, CreateDriverData } from '../services/driver';
 import { subscriptionService } from '../services/subscription';
 import { toast } from '@/hooks/use-toast';
@@ -34,6 +38,10 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
     license_expiry: '',
     years_of_experience: 0,
     vehicle_type: '',
+    truck_license_plate: '',
+    truck_model: '',
+    date_of_birth: '',
+    gender: '',
     bio: '',
     password: '',
     password_confirm: '',
@@ -137,7 +145,7 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
         break;
       case 'phone_number':
         if (!value) return 'Phone number is required';
-        if (!/^\d{10}$/.test(value.replace(/\D/g, ''))) return 'Phone number must be 10 digits';
+        if (!isValidPhoneNumber(value)) return 'Please enter a valid phone number';
         break;
       case 'license_number':
         if (!value || value.trim().length < 5) return 'License number must be at least 5 characters';
@@ -277,8 +285,16 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
     }
 
     try {
+      // Remove the '+' prefix from phone number before sending to backend
+      const dataToSend = {
+        ...formData,
+        phone_number: formData.phone_number.startsWith('+') 
+          ? formData.phone_number.slice(1) 
+          : formData.phone_number
+      };
+      
       // Send all data including password and organization_id
-      await driverService.createDriver(formData);
+      await driverService.createDriver(dataToSend);
       toast({
         title: "Success",
         description: "Driver profile created successfully.",
@@ -293,6 +309,10 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
         license_expiry: '',
         years_of_experience: 0,
         vehicle_type: '',
+        truck_license_plate: '',
+        truck_model: '',
+        date_of_birth: '',
+        gender: '',
         bio: '',
         password: '',
         password_confirm: '',
@@ -523,18 +543,20 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
           <div className="space-y-2">
             <Label htmlFor="phone_number">Phone Number</Label>
             <div className="relative">
-              <Phone className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input
-                id="phone_number"
-                placeholder="1234567890"
+              <PhoneInput
+                international
+                countryCallingCodeEditable={false}
+                defaultCountry="US"
                 value={formData.phone_number}
-                onChange={(e) => handleChange('phone_number', e.target.value)}
-                onBlur={(e) => {
-                  const error = validateField('phone_number', e.target.value);
+                onChange={(value) => {
+                  handleChange('phone_number', value || '');
+                  const error = validateField('phone_number', value || '');
                   setFormErrors(prev => ({ ...prev, phone_number: error }));
                 }}
-                className={`pl-10 ${formErrors.phone_number ? 'border-red-500' : ''}`}
-                required
+                className={`react-phone-number-input ${formErrors.phone_number ? 'border-red-500' : ''}`}
+                numberInputProps={{
+                  className: `w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.phone_number ? 'border-red-500' : 'border-gray-300'}`
+                }}
               />
             </div>
             {formErrors.phone_number && (
@@ -667,30 +689,85 @@ const CreateDriverModal: React.FC<CreateDriverModalProps> = ({ isOpen, onClose, 
             )}
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="vehicle_type">Vehicle Type</Label>
+              <Select 
+                onValueChange={(value) => {
+                  handleChange('vehicle_type', value);
+                  const error = validateField('vehicle_type', value);
+                  setFormErrors(prev => ({ ...prev, vehicle_type: error }));
+                }} 
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select vehicle type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {vehicleTypes.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {formErrors.vehicle_type && (
+                <div className="text-sm text-red-500 mt-1">{formErrors.vehicle_type}</div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="truck_license_plate">Truck License Plate</Label>
+              <div className="relative">
+                <Truck className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  id="truck_license_plate"
+                  placeholder="ABC-1234"
+                  value={formData.truck_license_plate || ''}
+                  onChange={(e) => handleChange('truck_license_plate', e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="truck_model">Truck Model (Optional)</Label>
+              <div className="relative">
+                <Truck className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  id="truck_model"
+                  placeholder="Peterbilt 379"
+                  value={formData.truck_model || ''}
+                  onChange={(e) => handleChange('truck_model', e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="date_of_birth">Date of Birth (Optional)</Label>
+              <Input
+                id="date_of_birth"
+                type="date"
+                value={formData.date_of_birth || ''}
+                onChange={(e) => handleChange('date_of_birth', e.target.value)}
+              />
+            </div>
+          </div>
+
           <div className="space-y-2">
-            <Label htmlFor="vehicle_type">Vehicle Type</Label>
-            <Select 
-              onValueChange={(value) => {
-                handleChange('vehicle_type', value);
-                const error = validateField('vehicle_type', value);
-                setFormErrors(prev => ({ ...prev, vehicle_type: error }));
-              }} 
-              required
-            >
+            <Label htmlFor="gender">Gender (Optional)</Label>
+            <Select onValueChange={(value) => handleChange('gender', value)}>
               <SelectTrigger>
-                <SelectValue placeholder="Select vehicle type" />
+                <SelectValue placeholder="Select gender" />
               </SelectTrigger>
               <SelectContent>
-                {vehicleTypes.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {type}
-                  </SelectItem>
-                ))}
+                <SelectItem value="male">Male</SelectItem>
+                <SelectItem value="female">Female</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+                <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
               </SelectContent>
             </Select>
-            {formErrors.vehicle_type && (
-              <div className="text-sm text-red-500 mt-1">{formErrors.vehicle_type}</div>
-            )}
           </div>
 
           <div className="space-y-2">

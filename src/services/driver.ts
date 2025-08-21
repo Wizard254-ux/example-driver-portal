@@ -10,6 +10,10 @@ export interface CreateDriverData {
   license_expiry: string;
   years_of_experience: number;
   vehicle_type: string;
+  truck_license_plate?: string;
+  truck_model?: string;
+  date_of_birth?: string;
+  gender?: string;
   bio?: string;
   organization_id?:number;
     password: string;
@@ -19,8 +23,10 @@ export interface CreateDriverData {
 export interface UpdateDriverData {
   years_of_experience: number;
   vehicle_type: string;
-  license_number: string; // Add this field
+  license_number: string;
   license_expiry: string;
+  truck_model?: string;
+  truck_license_plate?: string;
   bio?: string;
   organization_id: number;
 }
@@ -52,6 +58,7 @@ export interface DriverProfile {
     created_at: string;
     updated_at: string;
     is_deleted: boolean;
+    gender?: string;
   };
   organization: Organization;
   bio: string | null;
