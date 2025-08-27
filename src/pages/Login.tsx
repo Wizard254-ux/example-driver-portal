@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,6 +25,14 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { setUser } = useAuth();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const subscriptionId = searchParams.get('subscription');
+    if (subscriptionId) {
+      localStorage.setItem('redirectAfterLogin', subscriptionId);
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +45,14 @@ const Login = () => {
         title: "Login successful",
         description: "Welcome back to your dashboard.",
       });
-      navigate('/dashboard');
+      
+      const redirectSubscription = localStorage.getItem('redirectAfterLogin');
+      if (redirectSubscription) {
+        localStorage.removeItem('redirectAfterLogin');
+        navigate('/dashboard?tab=subscription&plan=' + redirectSubscription);
+      } else {
+        navigate('/dashboard');
+      }
     } catch (error) {
       toast({
         title: "Login failed",

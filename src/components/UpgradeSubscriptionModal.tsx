@@ -51,6 +51,7 @@ export const UpgradeSubscriptionModal: React.FC<UpgradeSubscriptionModalProps> =
     state_name: string;
     proration_applied?: any;
   } | null>(null);
+  const [loadingTax, setLoadingTax] = useState(false);
   const [currentSubscriptionDetails, setCurrentSubscriptionDetails] = useState<SubscriptionDetails | null>(null);
   const [newSubscriptionDetails, setNewSubscriptionDetails] = useState<SubscriptionDetails | null>(null);
   const { toast } = useToast();
@@ -187,6 +188,7 @@ export const UpgradeSubscriptionModal: React.FC<UpgradeSubscriptionModalProps> =
   const calculateTaxPreview = async (stateCode: string) => {
     if (!selectedPlan) return;
     
+    setLoadingTax(true);
     try {
       // Get proration and tax data from backend preview endpoint
       const preview = await subscriptionService.getProrationPreview(selectedPlan, stateCode);
@@ -217,6 +219,8 @@ export const UpgradeSubscriptionModal: React.FC<UpgradeSubscriptionModalProps> =
       }
     } catch (error) {
       console.error('Error calculating tax preview:', error);
+    } finally {
+      setLoadingTax(false);
     }
   };
 
@@ -497,8 +501,16 @@ export const UpgradeSubscriptionModal: React.FC<UpgradeSubscriptionModalProps> =
             className="mb-4"
           />
           
+          {/* Loading State */}
+          {loadingTax && (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+              <span className="ml-3 text-sm">Calculating tax...</span>
+            </div>
+          )}
+          
           {/* Billing Preview */}
-          {taxInfo && selectedState && selectedPlan && (() => {
+          {!loadingTax && taxInfo && selectedState && selectedPlan && (() => {
             const selectedSubscription = subscriptions.find(s => s.id === selectedPlan);
             if (!selectedSubscription) return null;
             

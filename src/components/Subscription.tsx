@@ -19,7 +19,12 @@ import CancelSubscriptionModal from './CancelSubscriptionModal';
 import { subscriptionService } from '../services/subscription';
 
 
-const Subscription = () => {
+interface SubscriptionProps {
+  selectedPlanId?: string | null;
+  onPlanProcessed?: () => void;
+}
+
+const Subscription: React.FC<SubscriptionProps> = ({ selectedPlanId, onPlanProcessed }) => {
   const [subscriptions, setSubscriptions] = useState<SubscriptionType[]>([]);
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
   const [paymentHistory, setPaymentHistory] = useState<PaymentHistory[]>([]);
@@ -55,8 +60,12 @@ const Subscription = () => {
         setPaymentHistory(history.sort((a, b) => b.id - a.id));
         setSubscriptionLimits(limits);
         
-        // Set initial tab to current subscription
-        setActiveTab("current");
+        // Set initial tab based on selectedPlanId
+        if (selectedPlanId) {
+          setActiveTab("plans");
+        } else {
+          setActiveTab("current");
+        }
 
         // Extract unique months for filtering
         const months = [...new Set(subs.map(sub => sub.duration_months))].sort((a, b) => a - b);
@@ -76,13 +85,36 @@ const Subscription = () => {
     fetchData();
   }, []); // Only run once on component mount
 
+  // Handle selectedPlanId from redirect
+  useEffect(() => {
+    if (selectedPlanId && subscriptions.length > 0) {
+      const planId = parseInt(selectedPlanId);
+      const plan = subscriptions.find(sub => sub.id === planId);
+      if (plan) {
+        setActiveTab("plans");
+        handleSubscribe(planId);
+        onPlanProcessed?.();
+      }
+    }
+  }, [selectedPlanId, subscriptions, onPlanProcessed]);
+
+  /**
+   * Handle subscription selection and validation flow
+   * Multi-step validation process before allowing subscription change
+   * 
+   * Validation Steps:
+   * 1. Driver limit eligibility check
+   * 2. Monthly change limits verification
+   * 3. Downgrade blocking period check (5-25 days)
+   * 4. Final subscription processing
+   */
   const handleSubscribe = async (subscriptionId: number) => {
     try {
       // STEP 1: Pre-validate subscription eligibility (driver limits)
       const validationData = await subscriptionService.validateSubscriptionEligibility(subscriptionId);
       
       if (!validationData.eligible) {
-        // Show validation error in dialog
+        // Show validation error in dialog based on error type
         if (validationData.validation_type === 'driver_limit_exceeded') {
           setValidationError({
             title: "Driver Limit Exceeded",
@@ -100,6 +132,7 @@ const Subscription = () => {
       }
       
       // STEP 2: Check subscription limits (monthly change limits)
+      // Prevent users from exceeding monthly upgrade/downgrade limits
       if (subscriptionStatus?.has_subscription && subscriptionLimits) {
         const selectedPlan = subscriptions.find(s => s.id === subscriptionId);
         const currentAmount = parseFloat(subscriptionStatus.amount || '0');
@@ -107,6 +140,7 @@ const Subscription = () => {
         const isUpgrade = newAmount > currentAmount;
         const isDowngrade = newAmount < currentAmount;
         
+        // Check if monthly limit has been reached for this change type
         if ((isUpgrade && !subscriptionLimits.limits.upgrade.allowed) || 
             (isDowngrade && !subscriptionLimits.limits.downgrade.allowed)) {
           const changeType = isUpgrade ? 'upgrade' : 'downgrade';
@@ -119,6 +153,7 @@ const Subscription = () => {
         }
         
         // STEP 3: Check 5-25 day blocking period for downgrades
+        // Business rule: Downgrades blocked between days 5-24 of subscription
         if (isDowngrade) {
           try {
             const downgradeCheck = await subscriptionService.checkDowngradeAllowed(subscriptionId);
@@ -138,7 +173,8 @@ const Subscription = () => {
         }
       }
       
-      // All validations passed - proceed with subscription
+      // All validations passed - proceed with subscription change
+      // Open upgrade modal with preselected plan
       setSelectedPlanForUpgrade(subscriptionId);
       setShowUpgradeModal(true);
       

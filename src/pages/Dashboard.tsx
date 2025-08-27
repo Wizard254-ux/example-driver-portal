@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '../components/AppSidebar';
 import DashboardContent from '../components/DashboardContent';
@@ -12,14 +13,42 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('Landing');
   const [orgSummary, setOrgSummary] = useState<{[key:string]:any}>({});
   const [loading, setLoading] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   
-  // Get orgId once when component mounts
+  /**
+   * Extract organization ID from stored user data
+   * Memoized to prevent unnecessary re-parsing on every render
+   */
   const orgId = useMemo(() => {
     const userData = localStorage.getItem('user_data');
     return userData ? JSON.parse(userData).organization_id : null;
   }, []); // Empty dependency array - only runs once
 
-  // Fix the useEffect dependency array - this was causing infinite re-renders
+  /**
+   * Handle deep linking via URL parameters
+   * Supports direct navigation to subscription tab with preselected plan
+   * Example: /dashboard?tab=subscription&plan=2
+   */
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    const plan = searchParams.get('plan');
+    
+    if (tab === 'subscription') {
+      setActiveTab('subscription');
+      if (plan) {
+        setSelectedPlanId(plan); // Preselect specific plan for upgrade
+      }
+      // Clear URL parameters after processing to clean up URL
+      setSearchParams({});
+    }
+  }, [searchParams, setSearchParams]);
+
+  /**
+   * Fetch organization data for dashboard header
+   * Only runs when orgId changes to prevent unnecessary API calls
+   * Includes loading state management to prevent concurrent requests
+   */
   useEffect(() => {
     const fetchOrgData = async () => {
       if (!orgId) {
@@ -44,7 +73,17 @@ const Dashboard = () => {
     fetchOrgData();
   }, [orgId]); // Only run when orgId changes, not on every render
 
-  // Memoize the content renderer to prevent unnecessary re-renders of child components
+  /**
+   * Memoized content renderer to prevent unnecessary re-renders
+   * Each tab renders a different component with appropriate props
+   * 
+   * Tab Mapping:
+   * - Landing: Dashboard overview and quick actions
+   * - Drivers: Driver management interface (maps to DashboardContent)
+   * - subscription: Subscription and billing management
+   * - profile: User profile settings
+   * - settings: Application settings
+   */
   const renderContent = useCallback(() => {
     switch (activeTab) {
       case 'Landing':
@@ -52,7 +91,7 @@ const Dashboard = () => {
       case 'Drivers':
         return <DashboardContent activeTab={activeTab} onTabChange={setActiveTab}/>;
       case 'subscription':
-        return <Subscription />;
+        return <Subscription selectedPlanId={selectedPlanId} onPlanProcessed={() => setSelectedPlanId(null)} />;
       case 'profile':
         return <Profile />;
       case 'settings':
@@ -60,9 +99,9 @@ const Dashboard = () => {
       default:
         return <DashboardContent activeTab={activeTab} onTabChange={setActiveTab}/>;
     }
-  }, [activeTab]);
+  }, [activeTab, selectedPlanId]); // Include selectedPlanId in dependencies
 
-  // Memoize the rendered content
+  // Memoize the rendered content to prevent unnecessary re-renders
   const content = useMemo(() => renderContent(), [renderContent]);
 
   return (

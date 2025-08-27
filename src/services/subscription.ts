@@ -161,16 +161,29 @@ export const subscriptionService = {
     return response.data;
   },
 
-  async calculateTax(amount: number, stateCode: string): Promise<{
+  async calculateTax(amount: number, stateCode: string, address?: {
+    city?: string;
+    postal_code?: string;
+    address_line1?: string;
+  }): Promise<{
     tax_amount: number;
     tax_rate: number;
     total_amount: number;
     state_name: string;
   }> {
-    const response = await api.post('/api/payment/calculate-tax/', {
+    const requestData: any = {
       amount,
       state_code: stateCode
-    });
+    };
+    
+    // Add address fields if provided for enhanced Stripe Tax calculation
+    if (address) {
+      if (address.city) requestData.city = address.city;
+      if (address.postal_code) requestData.postal_code = address.postal_code;
+      if (address.address_line1) requestData.address_line1 = address.address_line1;
+    }
+    
+    const response = await api.post('/api/payment/calculate-tax/', requestData);
     return response.data;
   },
 

@@ -341,7 +341,7 @@ function getColorForCategory(category: string) {
       <button
       onClick={handleRefresh}
       disabled={isRefreshing}
-      className="flex items-center space-x-2 px-2 absolute -top-2 right-6 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      className="flex items-center space-x-2 px-2 absolute -top-2 right-6 py-1 bg-blue-600 text-white rounded-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
     >
       <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
       <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
