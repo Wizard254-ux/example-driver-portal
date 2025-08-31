@@ -60,7 +60,119 @@ const ViewDriver: React.FC<DriverDataModalProps> = ({
     try {
       console.log('fetchig data fro driver ',driver)
       const response = await organizationService.getDriverInfo(driver.user.id);
-      setDriverData(response.driver);
+      
+      // Add dummy data for missing fields
+      const driverWithDefaults = {
+        driver_info: {
+          first_name: response.driver?.driver_info?.first_name || 'John',
+          last_name: response.driver?.driver_info?.last_name || 'Doe',
+          email: response.driver?.driver_info?.email || 'john.doe@example.com',
+          phone_number: response.driver?.driver_info?.phone_number || '+1 (555) 123-4567',
+          driver_id: response.driver?.driver_info?.driver_id || 12345,
+          organization: response.driver?.driver_info?.organization || 'FreightFusion Corp',
+          is_active: response.driver?.driver_info?.is_active ?? true,
+          driver_is_active: response.driver?.driver_info?.driver_is_active ?? true,
+          date_joined: response.driver?.driver_info?.date_joined || new Date().toISOString(),
+          last_login: response.driver?.driver_info?.last_login || new Date().toISOString(),
+          gender: response.driver?.driver_info?.gender || 'Male',
+          avatar: response.driver?.driver_info?.avatar || null,
+          bio: response.driver?.driver_info?.bio || 'Experienced truck driver with excellent safety record',
+          license_number: response.driver?.driver_info?.license_number || 'CDL-123456789',
+          license_expiry: response.driver?.driver_info?.license_expiry || new Date(Date.now() + 365*24*60*60*1000).toISOString(),
+          years_of_experience: response.driver?.driver_info?.years_of_experience || 5,
+          vehicle_type: response.driver?.driver_info?.vehicle_type || 'Semi-Truck',
+          assigned_truck_models: response.driver?.driver_info?.assigned_truck_models || ['Freightliner Cascadia', 'Peterbilt 579']
+        },
+        statistics: {
+          total_trips: response.driver?.statistics?.total_trips || 156,
+          completed_trips: response.driver?.statistics?.completed_trips || 142,
+          active_trips: response.driver?.statistics?.active_trips || 2,
+          cancelled_trips: response.driver?.statistics?.cancelled_trips || 12,
+          completion_rate: response.driver?.statistics?.completion_rate || 91.0,
+          total_distance: response.driver?.statistics?.total_distance || 125000,
+          total_expenses: response.driver?.statistics?.total_expenses || 15750.50,
+          assigned_trucks_count: response.driver?.statistics?.assigned_trucks_count || 2,
+          avg_trip_duration_hours: response.driver?.statistics?.avg_trip_duration_hours || 8.5,
+          recent_trips_30_days: response.driver?.statistics?.recent_trips_30_days || 12
+        },
+        trips: (response.driver?.trips && response.driver.trips.length > 0) ? response.driver.trips : [
+          {
+            trip_id: 1001,
+            source: 'Los Angeles, CA',
+            destination: 'Phoenix, AZ',
+            status: 'completed',
+            total_distance: 372,
+            truck_license_plate: 'ABC-1234',
+            trip_start: new Date(Date.now() - 7*24*60*60*1000).toISOString()
+          },
+          {
+            trip_id: 1002,
+            source: 'Phoenix, AZ',
+            destination: 'Denver, CO',
+            status: 'active',
+            total_distance: 602,
+            truck_license_plate: 'XYZ-5678',
+            trip_start: new Date(Date.now() - 2*24*60*60*1000).toISOString()
+          }
+        ],
+        expenses: (response.driver?.expenses && response.driver.expenses.length > 0) ? response.driver.expenses : [
+          {
+            date: new Date(Date.now() - 3*24*60*60*1000).toISOString(),
+            category: 'fuel',
+            amount: 245.75,
+            description: 'Fuel stop at Shell Station',
+            trip_source: 'Los Angeles, CA',
+            trip_destination: 'Phoenix, AZ'
+          },
+          {
+            date: new Date(Date.now() - 5*24*60*60*1000).toISOString(),
+            category: 'food',
+            amount: 28.50,
+            description: 'Lunch at truck stop diner',
+            trip_source: 'Phoenix, AZ',
+            trip_destination: 'Denver, CO'
+          },
+          {
+            date: new Date(Date.now() - 7*24*60*60*1000).toISOString(),
+            category: 'maintenance',
+            amount: 150.00,
+            description: 'Oil change and inspection',
+            trip_source: 'Denver, CO',
+            trip_destination: 'Kansas City, MO'
+          }
+        ],
+        assigned_trucks: response.driver?.assigned_trucks || [
+          {
+            truck_id: 101,
+            license_plate: 'ABC-1234',
+            model: 'Freightliner Cascadia',
+            year: 2020,
+            status: 'active'
+          },
+          {
+            truck_id: 102,
+            license_plate: 'XYZ-5678',
+            model: 'Peterbilt 579',
+            year: 2019,
+            status: 'maintenance'
+          }
+        ],
+        expenses_by_category: (response.driver?.expenses_by_category && Object.keys(response.driver.expenses_by_category).length > 0) ? response.driver.expenses_by_category : {
+          fuel: 8750.25,
+          food: 1250.75,
+          maintenance: 3200.50,
+          toll: 850.00,
+          parking: 450.00,
+          other: 1249.00
+        },
+        popular_routes: (response.driver?.popular_routes && response.driver.popular_routes.length > 0) ? response.driver.popular_routes : [
+          { source: 'Los Angeles, CA', destination: 'Phoenix, AZ', trip_count: 15, total_distance: 5580 },
+          { source: 'Phoenix, AZ', destination: 'Denver, CO', trip_count: 12, total_distance: 7224 },
+          { source: 'Denver, CO', destination: 'Kansas City, MO', trip_count: 10, total_distance: 6000 }
+        ]
+      };
+      
+      setDriverData(driverWithDefaults);
     } catch (err) {
       setError('Failed to fetch driver data');
       console.error('Error fetching driver data:', err);
